@@ -1,5 +1,6 @@
-/* The assistant panel reads like a work log pinned beside the board: your requests are sticky
-   notes, the model's changes are marker-coded entries. Tokens follow the react-whiteboard site. */
+/* The assistant panel reads like a work log pinned beside the board: your requests are small
+   sticky notes, the model's changes are marker-coded entries, its thinking stays folded to one
+   quiet line. Tokens follow the react-whiteboard site. */
 :root {
     --bg: #ffffff;
     --surface: #ffffff;
@@ -18,7 +19,6 @@
     --code-bg: #16181f;
     --code-fg: #e7e9f0;
     --font: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    --hand: 'Caveat', 'Kaiti SC', 'STKaiti', 'KaiTi', cursive;
     --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     color-scheme: light;
 }
@@ -348,12 +348,10 @@ button:disabled {
     margin: 0;
 }
 
-.log-empty-hand {
+.log-empty-title {
     margin-bottom: 6px !important;
-    font-family: var(--hand);
-    font-weight: 700;
-    font-size: 26px;
-    line-height: 1.2;
+    font-size: 17px;
+    font-weight: 600;
     color: var(--ink);
 }
 
@@ -361,28 +359,28 @@ button:disabled {
 .note {
     position: relative;
     align-self: flex-end;
-    max-width: 88%;
-    margin-top: 6px;
-    padding: 12px 16px 10px;
+    max-width: 84%;
+    margin-top: 4px;
+    padding: 10px 14px 9px;
     background: var(--note);
     color: var(--note-ink);
     border-radius: 2px;
     box-shadow: 0 1px 1px rgba(20, 22, 27, 0.08), 0 6px 14px -8px rgba(20, 22, 27, 0.3);
-    transform: rotate(0.8deg);
+    transform: rotate(0.6deg);
 }
 
 .note-tilt {
-    transform: rotate(-0.7deg);
+    transform: rotate(-0.5deg);
 }
 
 .note::before {
     content: '';
     position: absolute;
-    top: -8px;
+    top: -6px;
     left: 50%;
-    width: 46px;
-    height: 16px;
-    margin-left: -23px;
+    width: 36px;
+    height: 12px;
+    margin-left: -18px;
     background: var(--tape);
     border: 1px solid rgba(20, 22, 27, 0.06);
     transform: rotate(-3deg);
@@ -390,17 +388,16 @@ button:disabled {
 
 .note p {
     margin: 0;
-    font-family: var(--hand);
-    font-weight: 700;
-    font-size: 21px;
-    line-height: 1.3;
+    font-size: 14.5px;
+    font-weight: 500;
+    line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
 .note-tag {
     display: block;
-    margin-top: 2px;
+    margin-top: 3px;
     font-size: 11.5px;
     color: rgba(35, 38, 45, 0.6);
 }
@@ -429,24 +426,89 @@ button:disabled {
     background: color-mix(in srgb, var(--mark) 7%, var(--surface));
 }
 
-/* A reasoning model's thinking, shown quietly while it streams. */
-.thinking {
+/* A reasoning model's thinking: one quiet line with a timer; the full text on demand. */
+.thought,
+.working {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
     font-size: 13px;
     color: var(--muted);
 }
 
-.thinking summary {
-    width: fit-content;
-    cursor: pointer;
+.working {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
 }
 
-.thinking p {
-    margin: 4px 0 0;
-    padding-left: 10px;
-    border-left: 2px solid var(--line-strong);
-    max-height: 160px;
+.thought-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    border: 0;
+    padding: 2px 0;
+    background: none;
+    color: inherit;
+    font-size: 13px;
+}
+
+.thought-toggle:hover {
+    color: var(--ink);
+}
+
+.thought-chevron {
+    width: 6px;
+    height: 6px;
+    margin: 0 3px 0 2px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.15s;
+}
+
+.thought-toggle[aria-expanded='true'] .thought-chevron {
+    transform: rotate(45deg);
+}
+
+.thought-peek {
+    margin: 0 0 0 20px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    direction: rtl;
+    text-align: left;
+    font-size: 12.5px;
+    opacity: 0.8;
+}
+
+.thought-full {
+    margin: 2px 0 0 4px;
+    padding: 2px 0 2px 14px;
+    max-height: 220px;
     overflow-y: auto;
+    border-left: 2px solid var(--line-strong);
+    font-size: 12.5px;
+    line-height: 1.55;
     white-space: pre-wrap;
+}
+
+.spinner {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--line-strong);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Still being written: a dashed marker until the parameters are complete. */
@@ -538,30 +600,15 @@ button:disabled {
     font-size: 13px;
 }
 
-.log-busy {
-    margin: 0;
-    font-family: var(--hand);
-    font-weight: 700;
-    font-size: 22px;
-    color: var(--muted);
-}
-
-.log-busy span {
-    display: inline-block;
-    animation: pen 1.2s ease-in-out infinite;
-}
-
-@keyframes pen {
-    50% {
-        transform: translateX(4px) rotate(-6deg);
-    }
-}
-
 @media (prefers-reduced-motion: reduce) {
-    .log-busy span,
+    .spinner,
     .op-pending .op-title span,
     .say-live::after {
         animation: none;
+    }
+
+    .thought-chevron {
+        transition: none;
     }
 }
 
@@ -589,17 +636,16 @@ button:disabled {
 }
 
 .composer-examples button {
-    border: 1px dashed var(--line-strong);
+    border: 0;
     border-radius: 999px;
     padding: 4px 11px;
-    background: none;
+    background: var(--surface-sunk);
     font-size: 13px;
     white-space: nowrap;
 }
 
-.composer-examples button:hover:not(:disabled) {
-    border-style: solid;
-    border-color: var(--blue);
+.composer-examples button:hover {
+    background: color-mix(in srgb, var(--blue) 12%, var(--surface));
     color: var(--blue);
 }
 

@@ -10,6 +10,7 @@ import { clearSettings, loadSettings, modelInfo, PROVIDERS, saveSettings, settin
 type LogEntry =
     | { kind: 'prompt'; text: string; example: boolean }
     | { kind: 'say'; text: string }
+    | { kind: 'thought'; text: string; seconds: number }
     | { kind: 'calls'; calls: ToolCall[]; results: ToolCallResult[] }
     | { kind: 'error'; text: string; auth: boolean };
 
@@ -38,6 +39,9 @@ export function App() {
     const composer = useRef<HTMLTextAreaElement>(null);
     // Bumped after each AI turn; the effect below fits the view once React has rendered the new shapes.
     const [fitRequest, setFitRequest] = useState(0);
+    // Ticks once a second while the model works, so "thinking for 12 s" stays current.
+    const [now, setNow] = useState(() => Date.now());
+    const thinking = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
     const canAsk = Boolean(settings || serverModel);
 
     useEffect(() => {
@@ -56,6 +60,12 @@ export function App() {
     useEffect(() => {
         if (fitRequest) board.current?.zoomToFit();
     }, [fitRequest]);
+
+    useEffect(() => {
+        if (!busy) return;
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [busy]);
 
     const push = (entry: LogEntry) => setLog((l) => [...l, entry]);
 
@@ -83,11 +93,16 @@ export function App() {
         // Stream updates arrive many times a second; render at most once per frame.
         let frame = 0;
         const show = (m: LiveMessage) => {
+            // Time the thinking phase: from the first thinking block to the first block of anything else.
+            const t = thinking.current;
+            if (!t.start && m.blocks.some((b) => b?.type === 'thinking')) t.start = Date.now();
+            if (t.start && !t.end && m.blocks.some((b) => b && b.type !== 'thinking' && b.type !== 'other')) t.end = Date.now();
             cancelAnimationFrame(frame);
             frame = requestAnimationFrame(() => setLive(m));
         };
         try {
             for (let round = 0; round < MAX_ROUNDS; round++) {
+                thinking.current = { start: 0, end: 0 };
                 const res = await fetch('/api/ai', {
                     method: 'POST',
                     signal: stop.signal,
@@ -108,6 +123,11 @@ export function App() {
                 setLive(null);
 
                 messages.push({ role: 'assistant', content: toAssistantContent(message) });
+                const thought = message.blocks.map((b) => (b.type === 'thinking' ? b.thinking : '')).join('\n').trim();
+                if (thought) {
+                    const t = thinking.current;
+                    push({ kind: 'thought', text: thought, seconds: t.start ? Math.round(((t.end || Date.now()) - t.start) / 1000) : 0 });
+                }
                 for (const b of message.blocks) if (b.type === 'text' && b.text.trim()) push({ kind: 'say', text: b.text });
                 const calls = message.blocks.flatMap((b) => (b.type === 'tool_use' ? [{ id: b.id, name: b.name, input: b.input }] : []));
                 if (!calls.length) break;
@@ -194,7 +214,7 @@ export function App() {
                 <section className="log" aria-live="polite" aria-label="操作记录">
                     {log.length === 0 && (
                         <div className="log-empty">
-                            <p className="log-empty-hand">告诉我要在白板上画什么</p>
+                            <p className="log-empty-title">告诉我要在白板上画什么</p>
                             <p>
                                 比如“画一个三步的注册流程”“把所有框改成蓝色”。
                                 {canAsk ? '也可以直接点下面的示例。' : '先在右上角连接模型（DeepSeek 或 Claude），再输入指令或点下面的示例。'}
@@ -204,10 +224,16 @@ export function App() {
                     {log.map((entry, i) => (
                         <LogItem key={i} entry={entry} index={i} onOpenSettings={() => setSettingsOpen(true)} />
                     ))}
-                    {live && <LiveReply message={live} />}
+                    {live && (
+                        <LiveReply
+                            message={live}
+                            thinkingSeconds={thinking.current.start ? Math.max(0, Math.round((now - thinking.current.start) / 1000)) : 0}
+                        />
+                    )}
                     {busy && !live?.blocks.some((b) => b && b.type !== 'other') && (
-                        <p className="log-busy" role="status">
-                            正在想<span aria-hidden>…</span>
+                        <p className="working" role="status">
+                            <span className="spinner" aria-hidden />
+                            等待模型回复
                         </p>
                     )}
                     <div ref={logEnd} />
@@ -220,14 +246,16 @@ export function App() {
                         void ask(input);
                     }}
                 >
-                    <div className="composer-examples" role="group" aria-label="示例">
-                        <span>试试</span>
-                        {EXAMPLES.map((ex) => (
-                            <button key={ex.label} type="button" onClick={() => void ask(ex.prompt, true)} disabled={busy} title={ex.prompt}>
-                                {ex.label}
-                            </button>
-                        ))}
-                    </div>
+                    {!busy && (
+                        <div className="composer-examples" role="group" aria-label="示例">
+                            <span>试试</span>
+                            {EXAMPLES.map((ex) => (
+                                <button key={ex.label} type="button" onClick={() => void ask(ex.prompt, true)} title={ex.prompt}>
+                                    {ex.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <div className="composer-box">
                         <textarea
                             ref={composer}
@@ -271,6 +299,8 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
             );
         case 'say':
             return <p className="say">{entry.text}</p>;
+        case 'thought':
+            return <Thought text={entry.text} seconds={entry.seconds} live={false} />;
         case 'error':
             return (
                 <div className="op op-error">
@@ -324,7 +354,7 @@ const PENDING: Record<string, [string, string]> = {
 };
 
 /** The reply as it streams in: text grows word by word, tool calls show how far along they are. */
-function LiveReply({ message }: { message: LiveMessage }) {
+function LiveReply({ message, thinkingSeconds }: { message: LiveMessage; thinkingSeconds: number }) {
     return (
         <>
             {message.blocks.map((b, i) => {
@@ -339,14 +369,9 @@ function LiveReply({ message }: { message: LiveMessage }) {
                     ) : null;
                 }
                 if (b.type === 'thinking') {
-                    // Reasoning models (DeepSeek V4 among them) think before answering; show it so the wait is visible.
+                    // Reasoning models (DeepSeek V4 among them) think before answering; keep it to one quiet line.
                     const writing = i === message.blocks.length - 1;
-                    return b.thinking ? (
-                        <details key={i} className="thinking" open={writing}>
-                            <summary>{writing ? '正在思考…' : '思考过程'}</summary>
-                            <p className={writing ? 'say-live' : undefined}>{b.thinking}</p>
-                        </details>
-                    ) : null;
+                    return <Thought key={i} text={b.thinking} seconds={thinkingSeconds} live={writing} />;
                 }
                 if (b.type === 'tool_use') {
                     const [label, unit] = PENDING[b.name] ?? [`正在调用 ${b.name}`, '项'];
@@ -364,5 +389,28 @@ function LiveReply({ message }: { message: LiveMessage }) {
                 return null;
             })}
         </>
+    );
+}
+
+/**
+ * A model's reasoning, folded to one line: a spinner and a timer while it thinks, with the latest
+ * words peeking through; afterwards "thought for 12 s". The full text opens on click.
+ */
+function Thought({ text, seconds, live }: { text: string; seconds: number; live: boolean }) {
+    const [open, setOpen] = useState(false);
+    const tail = text.replace(/\s+/g, ' ').trim().slice(-90);
+    return (
+        <div className={`thought${live ? ' is-live' : ''}`}>
+            <button type="button" className="thought-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+                {live ? <span className="spinner" aria-hidden /> : <span className="thought-chevron" aria-hidden />}
+                {live ? `正在思考，已 ${seconds} 秒` : seconds ? `思考了 ${seconds} 秒` : '思考过程'}
+            </button>
+            {open ? <p className="thought-full">{text}</p> : live && tail && (
+                <p className="thought-peek">
+                    {/* Right-aligned and clipped on the left, so the newest words stay in view. */}
+                    <span dir="ltr">{tail}</span>
+                </p>
+            )}
+        </div>
     );
 }
