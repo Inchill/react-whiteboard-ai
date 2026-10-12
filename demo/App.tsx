@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { describeCall } from './describeCall';
-import { EXAMPLES } from './examples';
+import { EXAMPLE_GROUPS, loadExampleGroup, saveExampleGroup } from './examples';
 import { SettingsPanel } from './SettingsPanel';
 import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
 import {
@@ -47,6 +47,8 @@ export function App() {
     const [settings, setSettings] = useState<AISettings | null>(loadSettings);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [deepThinking, setDeepThinking] = useState(loadThinking);
+    const [exampleGroup, setExampleGroup] = useState(loadExampleGroup);
+    const examples = EXAMPLE_GROUPS.find((g) => g.id === exampleGroup) ?? EXAMPLE_GROUPS[0];
     const logEnd = useRef<HTMLDivElement>(null);
     const composer = useRef<HTMLTextAreaElement>(null);
     // Bumped after each AI turn; the effect below fits the view once React has rendered the new shapes.
@@ -293,13 +295,32 @@ export function App() {
                     }}
                 >
                     {!busy && (
-                        <div className="composer-examples" role="group" aria-label="示例">
-                            <span>试试</span>
-                            {EXAMPLES.map((ex) => (
-                                <button key={ex.label} type="button" onClick={() => void ask(ex.prompt, true)} title={ex.prompt}>
-                                    {ex.label}
-                                </button>
-                            ))}
+                        <div className="examples">
+                            <div className="examples-tabs" role="tablist" aria-label="示例分类">
+                                {EXAMPLE_GROUPS.map((g) => (
+                                    <button
+                                        key={g.id}
+                                        type="button"
+                                        role="tab"
+                                        id={`examples-tab-${g.id}`}
+                                        aria-selected={g.id === examples.id}
+                                        aria-controls="examples-panel"
+                                        onClick={() => {
+                                            saveExampleGroup(g.id);
+                                            setExampleGroup(g.id);
+                                        }}
+                                    >
+                                        {g.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="composer-examples" role="tabpanel" id="examples-panel" aria-labelledby={`examples-tab-${examples.id}`}>
+                                {examples.examples.map((ex) => (
+                                    <button key={ex.label} type="button" onClick={() => void ask(ex.prompt, true)} title={ex.prompt}>
+                                        {ex.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
                     <div className="composer-box">
