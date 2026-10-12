@@ -209,6 +209,62 @@ button:disabled {
     padding: 6px 10px;
 }
 
+select {
+    font: inherit;
+    color: inherit;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+}
+
+.demo-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+}
+
+.demo-settings label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+}
+
+.demo-settings input:not([type='checkbox']) {
+    font: inherit;
+    color: inherit;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+.demo-settings .demo-check {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+.demo-settings-summary,
+.demo-settings-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.demo-settings-summary span {
+    flex: 1;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 @media (max-width: 760px) {
     .demo {
         grid-template-columns: 1fr;

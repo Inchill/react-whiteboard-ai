@@ -17,48 +17,63 @@ const readBody = (req: IncomingMessage) =>
         req.on('error', reject);
     });
 
-type Provider = { name: string; url: string; key: string; model: string };
+export type ProviderName = 'anthropic' | 'deepseek';
+type Provider = { name: ProviderName; url: string; key: string; model: string };
 
 /**
- * Pick the model provider from .env.local. Both speak the Anthropic Messages format:
- * DeepSeek offers a compatible endpoint, so tool calls work the same way.
+ * Both providers speak the Anthropic Messages format: DeepSeek offers a compatible
+ * endpoint, so tool calls work the same way and the page needs no per-provider code.
  */
-function resolveProvider(env: Record<string, string>): Provider | null {
-    const wanted = env.AI_PROVIDER || (env.ANTHROPIC_API_KEY ? 'anthropic' : env.DEEPSEEK_API_KEY ? 'deepseek' : '');
-    if (wanted === 'deepseek' && env.DEEPSEEK_API_KEY) {
-        return {
-            name: 'deepseek',
-            url: 'https://api.deepseek.com/anthropic/v1/messages',
-            key: env.DEEPSEEK_API_KEY,
-            model: env.DEEPSEEK_MODEL || 'deepseek-flash',
-        };
+function makeProvider(name: ProviderName, key: string, model?: string, baseUrl?: string): Provider {
+    if (name === 'deepseek') {
+        return { name, key, url: 'https://api.deepseek.com/anthropic/v1/messages', model: model || 'deepseek-flash' };
     }
+    const base = (baseUrl || 'https://api.anthropic.com').replace(/\/$/, '');
+    return { name, key, url: `${base}/v1/messages`, model: model || 'claude-sonnet-5-5' };
+}
+
+/** The provider configured in .env.local, used when the page sends no key of its own. */
+function providerFromEnv(env: Record<string, string>): Provider | null {
+    const wanted = env.AI_PROVIDER || (env.ANTHROPIC_API_KEY ? 'anthropic' : env.DEEPSEEK_API_KEY ? 'deepseek' : '');
+    if (wanted === 'deepseek' && env.DEEPSEEK_API_KEY) return makeProvider('deepseek', env.DEEPSEEK_API_KEY, env.DEEPSEEK_MODEL);
     if (wanted === 'anthropic' && env.ANTHROPIC_API_KEY) {
-        return {
-            name: 'anthropic',
-            url: `${(env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/$/, '')}/v1/messages`,
-            key: env.ANTHROPIC_API_KEY,
-            model: env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
-        };
+        return makeProvider('anthropic', env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL, env.ANTHROPIC_BASE_URL);
     }
     return null;
 }
 
+const header = (req: IncomingMessage, name: string) => {
+    const v = req.headers[name];
+    return (Array.isArray(v) ? v[0] : v)?.trim() || undefined;
+};
+
+/** A key entered on the page arrives in request headers; it is used for this request only. */
+function providerFromRequest(req: IncomingMessage): Provider | null | 'invalid' {
+    const key = header(req, 'x-ai-key');
+    if (!key) return null;
+    const name = header(req, 'x-ai-provider');
+    if (name !== 'anthropic' && name !== 'deepseek') return 'invalid';
+    return makeProvider(name, key, header(req, 'x-ai-model'));
+}
+
 /**
- * Dev-only proxy to the model API. The key stays in this Node process
- * (read from .env.local) and never reaches the browser.
+ * Dev-only proxy to the model API. Keys come from the page (per request) or from .env.local,
+ * stay in this Node process and are never logged or stored.
  */
 export function aiProxy(env: Record<string, string>): Plugin {
-    const provider = resolveProvider(env);
+    const fallback = providerFromEnv(env);
     return {
         name: 'whiteboard-ai-proxy',
         configureServer(server) {
             server.middlewares.use('/api/status', (_req, res) =>
-                send(res, 200, { model: provider ? `${provider.name} · ${provider.model}` : null }),
+                send(res, 200, { model: fallback ? `${fallback.name} · ${fallback.model}` : null }),
             );
             server.middlewares.use('/api/ai', async (req, res) => {
                 if (req.method !== 'POST') return send(res, 405, { error: 'POST only' });
-                if (!provider) return send(res, 501, { error: 'Set ANTHROPIC_API_KEY or DEEPSEEK_API_KEY in .env.local and restart pnpm dev.' });
+                const fromPage = providerFromRequest(req);
+                if (fromPage === 'invalid') return send(res, 400, { error: 'Unknown provider.' });
+                const provider = fromPage ?? fallback;
+                if (!provider) return send(res, 501, { error: 'No API key. Add one in the settings panel, or in .env.local.' });
                 try {
                     const { messages } = JSON.parse(await readBody(req));
                     const upstream = await fetch(provider.url, {

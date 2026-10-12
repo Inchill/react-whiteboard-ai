@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { EXAMPLES, type Example } from './examples';
+import { Settings } from './Settings';
+import { clearSettings, loadSettings, saveSettings, settingsHeaders, type AISettings } from './settings';
 
 type LogEntry =
     | { kind: 'prompt'; text: string }
@@ -22,6 +24,8 @@ export function App() {
     const [input, setInput] = useState('');
     const [busy, setBusy] = useState(false);
     const [model, setModel] = useState<string | null | undefined>(undefined);
+    const [settings, setSettings] = useState<AISettings | null>(loadSettings);
+    const canAsk = Boolean(settings || model);
     const logEnd = useRef<HTMLDivElement>(null);
     // Bumped after each AI turn; the effect below fits the view once React has rendered the new shapes.
     const [fitRequest, setFitRequest] = useState(0);
@@ -71,7 +75,11 @@ export function App() {
         const messages: Message[] = [{ role: 'user', content: `Board:\n${JSON.stringify(ai.describe())}\n\n${prompt}` }];
         try {
             for (let round = 0; round < MAX_ROUNDS; round++) {
-                const res = await fetch('/api/ai', { method: 'POST', body: JSON.stringify({ messages }) });
+                const res = await fetch('/api/ai', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json', ...(settings ? settingsHeaders(settings) : {}) },
+                    body: JSON.stringify({ messages }),
+                });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error?.message ?? data.error ?? `HTTP ${res.status}`);
                 const content = data.content as ContentBlock[];
@@ -124,22 +132,29 @@ export function App() {
                     <div ref={logEnd} />
                 </section>
 
+                <Settings
+                    settings={settings}
+                    serverModel={model}
+                    onSave={(s) => {
+                        saveSettings(s);
+                        setSettings(s);
+                    }}
+                    onClear={() => {
+                        clearSettings();
+                        setSettings(null);
+                    }}
+                />
+
                 <form onSubmit={ask} className="demo-ask">
-                    {model === null && (
-                        <p className="demo-muted">
-                            想用自然语言指挥？在项目根目录的 <code>.env.local</code> 里写入 <code>ANTHROPIC_API_KEY</code> 或 <code>DEEPSEEK_API_KEY</code>，然后重启 <code>pnpm dev</code>。
-                        </p>
-                    )}
-                    {model && <p className="demo-muted">模型：{model}</p>}
                     <div className="demo-ask-row">
                         <input
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder={model ? '比如：在右边画一个三步的注册流程' : '需要先配置 API key'}
-                            disabled={!model || busy}
+                            placeholder={canAsk ? '比如：在右边画一个三步的注册流程' : '先在上方配置 API key'}
+                            disabled={!canAsk || busy}
                             aria-label="给 AI 的指令"
                         />
-                        <button type="submit" disabled={!model || busy || !input.trim()}>
+                        <button type="submit" disabled={!canAsk || busy || !input.trim()}>
                             {busy ? '思考中…' : '发送'}
                         </button>
                     </div>
