@@ -144,11 +144,19 @@ const sketchTool: ToolDefinition = {
                 description:
                     'Written before the strokes. A box for every part of the picture, sized and placed as in the finished drawing: ' +
                     'big masses (head, body) first, then what attaches to them (ears, legs, tail), then details (eyes, nose). ' +
-                    'Attached parts overlap the part they grow from; details sit inside it.',
+                    'Attached parts overlap the part they grow from and name it in `on`; details sit inside it.',
                 items: {
                     type: 'object',
                     properties: {
                         name: { type: 'string', maxLength: K.partName, description: 'e.g. "head", "left ear", "tail".' },
+                        on: {
+                            type: 'string',
+                            maxLength: K.partName,
+                            description:
+                                'The part this one grows from: a tail or a leg is on "body", an ear on "head", a handle on "cup". Its strokes ' +
+                                'must touch that part\'s strokes. Omit for the main part, for details inside a part, and for things that float ' +
+                                'free (clouds, steam).',
+                        },
                         x: num('Left edge in the drawing box.'),
                         y: num('Top edge in the drawing box.'),
                         w: num('Width.', { exclusiveMinimum: 0 }),

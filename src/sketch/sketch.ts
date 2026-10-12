@@ -21,7 +21,15 @@ export type SketchStroke = {
 };
 
 /** A planned region of the drawing, in the sketch's own coordinates. */
-export type SketchPart = { name: string; x: number; y: number; w: number; h: number };
+export type SketchPart = {
+    name: string;
+    /** The part this one grows from (a tail on the body). The tool checks that their strokes touch. */
+    on?: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+};
 
 export type SketchInput = {
     /** What is drawn and how it is posed, in a few words. The plan before any coordinates. */

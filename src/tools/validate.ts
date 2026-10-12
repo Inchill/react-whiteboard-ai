@@ -1,5 +1,5 @@
 import type { DiagramEdge, DiagramInput, DiagramNode } from '../layout/diagram';
-import { parsePath, samplePath, type Subpath } from '../sketch/path';
+import { parsePath, samplePath, type Pt } from '../sketch/path';
 import { SKETCH_DEFAULTS, type SketchInput, type SketchPart, type SketchStroke } from '../sketch/sketch';
 import type { Operation, OperationName, ShapeInput, ShapePatch } from '../types';
 
@@ -299,8 +299,9 @@ function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
     rawParts.slice(0, L.parts).forEach((item, i) => {
         const path = `input.parts[${i}]`;
         if (!isObj(item)) return c.fail(path, 'expected an object');
-        c.unknownKeys(item, path, ['name', 'x', 'y', 'w', 'h']);
+        c.unknownKeys(item, path, ['name', 'on', 'x', 'y', 'w', 'h']);
         const name = short(c, item, 'name', path, L.partName, true);
+        const on = short(c, item, 'on', path, L.partName, false);
         const box = {
             x: c.number(item, 'x', path, { required: true }),
             y: c.number(item, 'y', path, { required: true }),
@@ -309,7 +310,7 @@ function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
         };
         if (name === undefined || box.x === undefined || box.y === undefined || box.w === undefined || box.h === undefined) return;
         if (parts.has(name)) return c.fail(`${path}.name`, `"${name}" is used by another part; give each part its own name`);
-        const part = { name, x: box.x, y: box.y, w: box.w, h: box.h };
+        const part: SketchPart = clean({ name, on, x: box.x, y: box.y, w: box.w, h: box.h });
         const slack = 0.05 * Math.max(boxW, boxH);
         if (part.x < -slack || part.y < -slack || part.x + part.w > boxW + slack || part.y + part.h > boxH + slack) {
             c.fail(path, `"${name}" (${area(part)}) is outside the ${boxW} × ${boxH} drawing box`);
@@ -318,6 +319,16 @@ function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
         partIndex.set(name, i);
     });
 
+    parts.forEach((p) => {
+        if (p.on === undefined) return;
+        const path = `input.parts[${partIndex.get(p.name)}].on`;
+        if (p.on === p.name) c.fail(path, 'a part cannot be on itself');
+        else if (!parts.has(p.on)) c.fail(path, `"${p.on}" is not one of the parts: ${[...parts.keys()].join(', ')}`);
+    });
+
+    const extent = Math.max(boxW, boxH);
+    // Points along each part's strokes, for the attachment check below.
+    const drawn = new Map<string, Pt[]>();
     const raw = c.array(input, 'strokes', 'input') ?? [];
     if (raw.length > L.strokes) c.fail('input.strokes', `has more than ${L.strokes} strokes`);
     let total = 0;
@@ -341,7 +352,11 @@ function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
                 try {
                     const subpaths = parsePath(d);
                     if (!subpaths.length) c.fail(`${path}.d`, 'draws nothing');
-                    else if (part) checkInside(c, path, subpaths, part, Math.max(boxW, boxH));
+                    else if (part) {
+                        const points = subpaths.flatMap((sub) => samplePath(sub, extent / 100));
+                        checkInside(c, path, points, part, extent);
+                        drawn.set(part.name, [...(drawn.get(part.name) ?? []), ...points]);
+                    }
                 } catch (e) {
                     c.fail(`${path}.d`, `is not valid SVG path data: ${e instanceof Error ? e.message : String(e)}`);
                 }
@@ -355,6 +370,7 @@ function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
             if (!used.has(p.name)) c.fail(`input.parts[${partIndex.get(p.name)}]`, `"${p.name}" has no strokes; draw it or remove it from parts`);
         });
     }
+    if (c.errors.length === before) checkAttached(c, parts, partIndex, drawn, extent);
     if (c.errors.length > before) return undefined;
     return clean({ subject, width, height, parts: [...parts.values()], strokes, size, x, y });
 }
@@ -366,16 +382,14 @@ const area = (p: SketchPart) => `x ${r0(p.x)}–${r0(p.x + p.w)}, y ${r0(p.y)}�
  * A stroke that wanders far from its part's box means the coordinates and the plan disagree, which
  * is how a tail ends up across the face. A little overshoot is fine: hand drawing is not exact.
  */
-function checkInside(c: Checker, path: string, subpaths: Subpath[], part: SketchPart, extent: number) {
+function checkInside(c: Checker, path: string, points: Pt[], part: SketchPart, extent: number) {
     const tolerance = 0.2 * Math.max(part.w, part.h) + 0.03 * extent;
     let worst = { d: 0, x: 0, y: 0 };
-    for (const sub of subpaths) {
-        for (const p of samplePath(sub, extent / 100)) {
-            const dx = Math.max(part.x - p.x, 0, p.x - (part.x + part.w));
-            const dy = Math.max(part.y - p.y, 0, p.y - (part.y + part.h));
-            const d = Math.hypot(dx, dy);
-            if (d > worst.d) worst = { d, x: p.x, y: p.y };
-        }
+    for (const p of points) {
+        const dx = Math.max(part.x - p.x, 0, p.x - (part.x + part.w));
+        const dy = Math.max(part.y - p.y, 0, p.y - (part.y + part.h));
+        const d = Math.hypot(dx, dy);
+        if (d > worst.d) worst = { d, x: p.x, y: p.y };
     }
     if (worst.d > tolerance) {
         c.fail(
@@ -384,6 +398,33 @@ function checkInside(c: Checker, path: string, subpaths: Subpath[], part: Sketch
                 'Keep each stroke in its part, or fix the part\'s box if the plan was wrong.',
         );
     }
+}
+
+/**
+ * A part said to be on another (a tail on the body, an ear on the head) has to touch it: some point
+ * of its strokes lies within a few units of that part's strokes. This catches a tail floating
+ * beside the body, which the box check cannot see when the box itself was planned in the wrong place.
+ */
+function checkAttached(c: Checker, parts: Map<string, SketchPart>, index: Map<string, number>, drawn: Map<string, Pt[]>, extent: number) {
+    const reach = 0.04 * extent;
+    parts.forEach((part) => {
+        if (part.on === undefined) return;
+        const own = drawn.get(part.name) ?? [];
+        const base = drawn.get(part.on) ?? [];
+        let best = { d: Infinity, a: own[0], b: base[0] };
+        for (const a of own) {
+            for (const b of base) {
+                const d = Math.hypot(a.x - b.x, a.y - b.y);
+                if (d < best.d) best = { d, a, b };
+            }
+        }
+        if (!own.length || !base.length || best.d <= reach) return;
+        c.fail(
+            `input.parts[${index.get(part.name)}]`,
+            `"${part.name}" is on "${part.on}" but does not touch it: the closest points are (${r0(best.a.x)}, ${r0(best.a.y)}) and ` +
+                `(${r0(best.b.x)}, ${r0(best.b.y)}), ${r0(best.d)} units apart. Start "${part.name}" on the outline of "${part.on}".`,
+        );
+    });
 }
 
 /**

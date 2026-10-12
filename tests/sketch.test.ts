@@ -156,6 +156,39 @@ describe('draw_sketch tool', () => {
         ]);
     });
 
+    it('checks that a part drawn on another touches it', () => {
+        const input = {
+            subject: 'a cat',
+            parts: [
+                { name: 'body', x: 20, y: 40, w: 50, h: 50 },
+                { name: 'tail', on: 'body', x: 70, y: 70, w: 25, h: 20 },
+                { name: 'ear', on: 'head', x: 0, y: 0, w: 10, h: 10 },
+                { name: 'cloud', x: 70, y: 0, w: 30, h: 20 },
+            ],
+            strokes: [
+                { part: 'body', d: 'M20 65 A25 25 0 1 1 70 65 A25 25 0 1 1 20 65 Z' },
+                { part: 'tail', d: 'M80 85 C90 80 95 75 90 70' },
+                { part: 'ear', d: 'M2 8 L5 2 L8 8' },
+                // Floats free and says so: no check.
+                { part: 'cloud', d: 'M75 15 Q85 0 95 15 Z' },
+            ],
+        };
+        const r = parseOperation('draw_sketch', input);
+        expect(r).toMatchObject({ ok: false, errors: ['input.parts[2].on: "head" is not one of the parts: body, tail, ear, cloud'] });
+
+        input.parts[2].on = 'body';
+        input.parts[2] = { ...input.parts[2], x: 30, y: 30 };
+        input.strokes[2].d = 'M32 42 L35 34 L38 42';
+        const r2 = parseOperation('draw_sketch', input);
+        expect(r2.ok).toBe(false);
+        if (r2.ok) return;
+        expect(r2.errors).toHaveLength(1);
+        expect(r2.errors[0]).toMatch(/^input\.parts\[1\]: "tail" is on "body" but does not touch it: the closest points are \(\d+, \d+\) and \(\d+, \d+\), \d+ units apart/);
+
+        input.strokes[1].d = 'M68 75 C90 80 95 75 90 70';
+        expect(parseOperation('draw_sketch', input)).toMatchObject({ ok: true });
+    });
+
     it('places the drawing beside existing content', () => {
         const existing: Shape = { id: 'old', type: 'rect', x: 0, y: 0, w: 100, h: 100, fill: 'none', color: 'ink', strokeWidth: 2, strokeStyle: 'solid' };
         const input = { ...plan, strokes: [{ part: 'all', d: 'M0 0 L100 0' }] };
