@@ -18,7 +18,7 @@ const field = (v: unknown, k: string) => (typeof v === 'object' && v !== null ? 
 export function describeCall(call: ToolCall, result: ToolCallResult): { kind: CallKind; title: string; detail?: string } {
     const kind: CallKind = !result.ok && !result.created.length && !result.updated.length && !result.deleted.length
         ? 'error'
-        : call.name === 'add_shapes' ? 'add' : call.name === 'delete_shapes' ? 'delete' : 'update';
+        : call.name === 'add_shapes' || call.name === 'add_diagram' ? 'add' : call.name === 'delete_shapes' ? 'delete' : 'update';
 
     switch (call.name) {
         case 'add_shapes': {
@@ -39,6 +39,17 @@ export function describeCall(call: ToolCall, result: ToolCallResult): { kind: Ca
         case 'update_shapes': {
             const n = list(field(call.input, 'updates')).length;
             return { kind, title: kind === 'error' ? `想修改 ${n} 个图形，但参数有误` : `修改了 ${result.updated.length} 个图形` };
+        }
+        case 'add_diagram': {
+            const nodes = list(field(call.input, 'nodes')).length;
+            const edges = list(field(call.input, 'edges')).length;
+            const layers = new Set(list(field(call.input, 'nodes')).map((n) => field(n, 'layer')).filter(Boolean)).size;
+            const parts = [`${nodes} 个节点`, `${edges} 条连线`, ...(layers ? [`${layers} 层`] : [])];
+            return {
+                kind,
+                title: kind === 'error' ? '想画一张图，但结构有误' : '自动排版了一张图',
+                detail: parts.join('、'),
+            };
         }
         case 'delete_shapes': {
             const n = list(field(call.input, 'ids')).length;

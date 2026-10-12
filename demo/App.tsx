@@ -411,6 +411,7 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
 
 const PENDING: Record<string, [string, string]> = {
     add_shapes: ['正在添加图形', '个'],
+    add_diagram: ['正在描述图的结构', '个节点'],
     update_shapes: ['正在修改图形', '处'],
     delete_shapes: ['正在删除图形', '个'],
 };
