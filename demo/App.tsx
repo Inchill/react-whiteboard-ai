@@ -4,7 +4,7 @@ import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult }
 import { describeCall } from './describeCall';
 import { EXAMPLES } from './examples';
 import { SettingsPanel } from './SettingsPanel';
-import { countSoFar, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
+import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
 import { clearSettings, loadSettings, modelInfo, PROVIDERS, saveSettings, settingsHeaders, type AISettings, type Provider } from './settings';
 
 type LogEntry =
@@ -101,7 +101,9 @@ export function App() {
                     push({ kind: 'error', text: auth ? `模型拒绝了这个 API key（${res.status}）：${detail}` : `请求失败：${detail}`, auth });
                     return;
                 }
-                const message = await readMessageStream(res.body, show);
+                // The proxy streams; if the upstream answered in one piece instead, read it whole.
+                const streamed = (res.headers.get('content-type') ?? '').includes('text/event-stream');
+                const message = streamed ? await readMessageStream(res.body, show) : fromCompleteMessage(await res.json());
                 cancelAnimationFrame(frame);
                 setLive(null);
 
@@ -203,7 +205,7 @@ export function App() {
                         <LogItem key={i} entry={entry} index={i} onOpenSettings={() => setSettingsOpen(true)} />
                     ))}
                     {live && <LiveReply message={live} />}
-                    {busy && !live?.blocks.length && (
+                    {busy && !live?.blocks.some((b) => b && b.type !== 'other') && (
                         <p className="log-busy" role="status">
                             正在想<span aria-hidden>…</span>
                         </p>
@@ -334,6 +336,16 @@ function LiveReply({ message }: { message: LiveMessage }) {
                         <p key={i} className={writing ? 'say say-live' : 'say'}>
                             {b.text}
                         </p>
+                    ) : null;
+                }
+                if (b.type === 'thinking') {
+                    // Reasoning models (DeepSeek V4 among them) think before answering; show it so the wait is visible.
+                    const writing = i === message.blocks.length - 1;
+                    return b.thinking ? (
+                        <details key={i} className="thinking" open={writing}>
+                            <summary>{writing ? '正在思考…' : '思考过程'}</summary>
+                            <p className={writing ? 'say-live' : undefined}>{b.thinking}</p>
+                        </details>
                     ) : null;
                 }
                 if (b.type === 'tool_use') {

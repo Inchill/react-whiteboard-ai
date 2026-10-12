@@ -18,8 +18,11 @@ function startBlock(cb: Record<string, unknown>): LiveBlock {
     switch (cb.type) {
         case 'text':
             return { type: 'text', text: String(cb.text ?? '') };
-        case 'tool_use':
-            return { type: 'tool_use', id: String(cb.id), name: String(cb.name), partialJson: '', done: false };
+        case 'tool_use': {
+            // Some compatible endpoints send the whole input here instead of streaming it in deltas.
+            const full = cb.input && typeof cb.input === 'object' && Object.keys(cb.input).length ? cb.input : undefined;
+            return { type: 'tool_use', id: String(cb.id), name: String(cb.name), partialJson: full ? JSON.stringify(full) : '', done: false };
+        }
         case 'thinking':
             return { type: 'thinking', thinking: String(cb.thinking ?? ''), signature: String(cb.signature ?? '') };
         default:
@@ -119,6 +122,12 @@ export async function readMessageStream(body: ReadableStream<Uint8Array>, onUpda
     // A stream cut short still yields usable tool calls for the blocks that finished.
     message = { ...message, blocks: message.blocks.filter(Boolean).map((b) => (b.type === 'tool_use' && !b.done ? finishBlock(b) : b)) };
     return message;
+}
+
+/** Build the same result from a complete, non-streamed Messages API response. */
+export function fromCompleteMessage(data: { content?: Record<string, unknown>[]; stop_reason?: string }): LiveMessage {
+    const blocks = (data.content ?? []).map((cb) => finishBlock(startBlock(cb)));
+    return { blocks, stopReason: data.stop_reason ?? null };
 }
 
 /** The assistant turn to send back to the model in the next request. */

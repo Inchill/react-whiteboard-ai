@@ -429,6 +429,26 @@ button:disabled {
     background: color-mix(in srgb, var(--mark) 7%, var(--surface));
 }
 
+/* A reasoning model's thinking, shown quietly while it streams. */
+.thinking {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.thinking summary {
+    width: fit-content;
+    cursor: pointer;
+}
+
+.thinking p {
+    margin: 4px 0 0;
+    padding-left: 10px;
+    border-left: 2px solid var(--line-strong);
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
 /* Still being written: a dashed marker until the parameters are complete. */
 .op-pending {
     --mark: var(--muted);

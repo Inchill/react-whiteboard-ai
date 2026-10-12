@@ -17,6 +17,35 @@ const readBody = (req: IncomingMessage) =>
         req.on('error', reject);
     });
 
+/**
+ * Counts event and delta types in a relayed stream, so the terminal shows what the model sent
+ * (never its content): e.g. "first event after 420 ms, 63 events: thinking_delta×40, text_delta×12".
+ */
+class EventTally {
+    private counts = new Map<string, number>();
+    private first = 0;
+    private rest = '';
+    private decoder = new TextDecoder();
+    constructor(private started: number) {}
+
+    add(chunk: Uint8Array) {
+        if (!this.first) this.first = Date.now() - this.started;
+        const lines = (this.rest + this.decoder.decode(chunk, { stream: true })).split('\n');
+        this.rest = lines.pop() ?? '';
+        for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const kind = /"delta":\{"type":"([a-z_]+)"/.exec(line)?.[1] ?? /"type":"([a-z_]+)"/.exec(line)?.[1] ?? 'unknown';
+            this.counts.set(kind, (this.counts.get(kind) ?? 0) + 1);
+        }
+    }
+
+    summary() {
+        const total = [...this.counts.values()].reduce((a, b) => a + b, 0);
+        const parts = [...this.counts].map(([k, n]) => `${k}×${n}`).join(', ');
+        return `first event after ${this.first} ms, ${total} events in ${Date.now() - this.started} ms: ${parts || 'none'}`;
+    }
+}
+
 export type ProviderName = 'anthropic' | 'deepseek';
 type Provider = { name: ProviderName; url: string; key: string; model: string };
 
@@ -65,6 +94,7 @@ export function aiProxy(env: Record<string, string>): Plugin {
     return {
         name: 'whiteboard-ai-proxy',
         configureServer(server) {
+            const log = (message: string) => server.config.logger.info(`[whiteboard-ai] ${message}`, { timestamp: true });
             server.middlewares.use('/api/status', (_req, res) =>
                 send(res, 200, fallback ? { provider: fallback.name, model: fallback.model } : null),
             );
@@ -76,6 +106,7 @@ export function aiProxy(env: Record<string, string>): Plugin {
                 if (!provider) return send(res, 501, { error: 'No API key. Add one in the settings panel, or in .env.local.' });
                 // Stop the upstream request when the page goes away or presses Stop.
                 const abort = new AbortController();
+                const started = Date.now();
                 res.on('close', () => abort.abort());
                 try {
                     const { messages } = JSON.parse(await readBody(req));
@@ -92,12 +123,21 @@ export function aiProxy(env: Record<string, string>): Plugin {
                             messages,
                         }),
                     });
-                    if (!upstream.ok || !upstream.body) return send(res, upstream.status, await upstream.text());
+                    const type = upstream.headers.get('content-type') ?? '';
+                    if (!upstream.ok || !upstream.body || !type.includes('text/event-stream')) {
+                        log(`${provider.name} ${provider.model}: HTTP ${upstream.status}, ${type || 'no content type'} (not streamed)`);
+                        return send(res, upstream.status, await upstream.text());
+                    }
                     // Relay the server-sent events as they arrive.
                     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
                     const reader = upstream.body.getReader();
-                    for (let r = await reader.read(); !r.done; r = await reader.read()) res.write(r.value);
+                    const tally = new EventTally(started);
+                    for (let r = await reader.read(); !r.done; r = await reader.read()) {
+                        tally.add(r.value);
+                        res.write(r.value);
+                    }
                     res.end();
+                    log(`${provider.name} ${provider.model}: ${tally.summary()}`);
                 } catch (e) {
                     if (abort.signal.aborted) return res.end();
                     if (res.headersSent) return res.end();
