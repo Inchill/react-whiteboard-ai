@@ -74,7 +74,7 @@ The tool result maps each node id to the box drawn for it (`nodes: { gw: "s12", 
 }
 ```
 
-- **Plan first**: the model states the `subject` (what it is, the view, the pose), then a box for each part, then the strokes, each tagged with its part. A part that grows from another names it in `on` (a tail `on` the body, an ear `on` the head). The tool checks that every stroke stays near its part's box, that every part gets drawn, and that each part with `on` actually touches the part it grows from. When they disagree, for example a tail drawn across the face or floating beside the body, the call fails with the exact stroke and position, and the model fixes it in the next round. Planning the layout before writing coordinates matters most for models without a reasoning mode.
+- **Plan first**: the model states the `subject` (what it is, the view, the pose), then a box for each part, then the strokes, each tagged with its part. A part that grows from another names it in `on` (a tail `on` the body, an ear `on` the head). The tool checks that every stroke stays near its part's box, that every part gets drawn, and that each part with `on` is near the part it grows from. A small gap, such as a head drawn a few units above the body, is closed while drawing: the part moves to touch, taking along what is on it or inside it (ears, eyes), and the tool result tells the model what moved. When they disagree badly, for example a tail drawn across the face or far from the body, the call fails with the exact stroke and position, and the model fixes it in the next round. Planning the layout before writing coordinates matters most for models without a reasoning mode.
 - **Paths**: paths are written in their own coordinate box (default 100 × 100, y down) and scaled so the longest side is `size` on the board. Every SVG path command works: `M L H V C S Q T A Z`, absolute and relative.
 - **Strokes**: each `M` starts a new pen stroke. The stroke gets a natural hand-drawn line: it is thinner at the ends, with a slight wobble, and closed loops overlap a little where they meet. The variation comes from a seed derived from the paths, so the same input always draws the same way.
 - **Result**: the result is ordinary pen shapes, so users can move, recolor or erase them like their own strokes.
@@ -180,6 +180,7 @@ Without React, `createWhiteboardAgent(ref)` returns the same `{ describe, execut
 | `applyOperations(shapes, ops)` | Pure: apply already validated operations |
 | `layoutDiagram(input, { origin })` | Pure: lay out a node-and-arrow diagram as board shapes, no model needed |
 | `sketchToShapes(input, { origin, seed })` | Pure: SVG paths → hand-drawn pen strokes, no model needed |
+| `joinParts(input)` | The moves `sketchToShapes` makes to join attached parts |
 | `parsePath(d)`, `samplePath(subpath, step)` | SVG path data → subpaths → evenly spaced points |
 | `LIMITS`, `DEFAULTS`, `DIAGRAM_STYLE`, `SKETCH_DEFAULTS` | Limits and default styles |
 
