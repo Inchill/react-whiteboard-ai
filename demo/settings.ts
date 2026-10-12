@@ -1,37 +1,41 @@
-import { ENDPOINTS, type ProviderName } from './modelRequest';
+import { serviceName } from './modelRequest';
 
-export type Provider = ProviderName;
-
+/** Any Anthropic-compatible endpoint: the user fills in all three. */
 export type AISettings = {
-    provider: Provider;
+    baseUrl: string;
     key: string;
-    /** Empty means the provider's default model. */
     model: string;
-    /** Empty means the provider's own endpoint; otherwise a compatible endpoint or a proxy. */
-    baseUrl?: string;
     /** Keep in localStorage across sessions instead of sessionStorage (this tab only). */
     remember: boolean;
 };
 
-export const PROVIDERS: Record<Provider, { label: string; defaultModel: string; keyHint: string }> = {
-    deepseek: { label: 'DeepSeek', defaultModel: ENDPOINTS.deepseek.model, keyHint: 'sk-...' },
-    anthropic: { label: 'Claude', defaultModel: ENDPOINTS.anthropic.model, keyHint: 'sk-ant-...' },
+/** Settings saved before the endpoint became free-form named a provider instead. */
+const LEGACY: Record<string, { baseUrl: string; model: string }> = {
+    deepseek: { baseUrl: 'https://api.deepseek.com/anthropic', model: 'deepseek-flash' },
+    anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-5-5' },
 };
 
 const STORAGE_KEY = 'react-whiteboard-ai-demo:settings';
 
-const isSettings = (v: unknown): v is AISettings =>
-    typeof v === 'object' &&
-    v !== null &&
-    ((v as AISettings).provider === 'anthropic' || (v as AISettings).provider === 'deepseek') &&
-    typeof (v as AISettings).key === 'string' &&
-    typeof (v as AISettings).model === 'string';
+const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+
+function upgrade(v: unknown): AISettings | null {
+    if (typeof v !== 'object' || v === null) return null;
+    const o = v as Record<string, unknown>;
+    const legacy = LEGACY[text(o.provider)];
+    const settings = {
+        baseUrl: text(o.baseUrl) || legacy?.baseUrl || '',
+        key: text(o.key),
+        model: text(o.model) || legacy?.model || '',
+        remember: o.remember === true,
+    };
+    return settings.baseUrl && settings.key && settings.model ? settings : null;
+}
 
 function read(storage: () => Storage): AISettings | null {
     try {
         const raw = storage().getItem(STORAGE_KEY);
-        const parsed = raw ? JSON.parse(raw) : null;
-        return isSettings(parsed) && parsed.key ? parsed : null;
+        return raw ? upgrade(JSON.parse(raw)) : null;
     } catch {
         return null;
     }
@@ -65,14 +69,13 @@ export function clearSettings() {
     remove(() => localStorage);
 }
 
-export const modelInfo = (s: AISettings) => ({ provider: PROVIDERS[s.provider].label, model: s.model || PROVIDERS[s.provider].defaultModel });
+export const modelInfo = (s: Pick<AISettings, 'baseUrl' | 'model'>) => ({ service: serviceName(s.baseUrl), model: s.model });
 
-/** Headers the local dev proxy reads to use this key for one request. */
+/** Headers the local dev proxy reads to use this endpoint and key for one request. */
 export const settingsHeaders = (s: AISettings): Record<string, string> => ({
-    'x-ai-provider': s.provider,
+    'x-ai-base-url': s.baseUrl,
     'x-ai-key': s.key,
-    ...(s.model ? { 'x-ai-model': s.model } : {}),
-    ...(s.baseUrl ? { 'x-ai-base-url': s.baseUrl } : {}),
+    'x-ai-model': s.model,
 });
 
 const THINKING_KEY = 'react-whiteboard-ai-demo:thinking';

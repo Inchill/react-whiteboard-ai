@@ -4,19 +4,17 @@ import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult }
 import { describeCall } from './describeCall';
 import { EXAMPLE_GROUPS, loadExampleGroup, saveExampleGroup } from './examples';
 import { SettingsPanel } from './SettingsPanel';
-import { callModel, messagesUrl } from './modelRequest';
+import { callModel, serviceName } from './modelRequest';
 import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
 import {
     clearSettings,
     loadSettings,
     loadThinking,
     modelInfo,
-    PROVIDERS,
     saveSettings,
     saveThinking,
     settingsHeaders,
     type AISettings,
-    type Provider,
 } from './settings';
 
 type LogEntry =
@@ -41,14 +39,6 @@ const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
  */
 const DIRECT = !import.meta.env.DEV;
 
-const hostOf = (s: AISettings) => {
-    try {
-        return new URL(messagesUrl(s)).host;
-    } catch {
-        return '接口地址';
-    }
-};
-
 export function App() {
     const board = useRef<WhiteboardHandle>(null);
     const ai = useWhiteboardAI(board);
@@ -58,8 +48,8 @@ export function App() {
     /** The model's reply while it is still streaming in. */
     const [live, setLive] = useState<LiveMessage | null>(null);
     const stopRef = useRef<AbortController | null>(null);
-    /** Provider configured in .env.local, if any. */
-    const [serverModel, setServerModel] = useState<{ provider: Provider; model: string } | null>(null);
+    /** Endpoint and model configured in .env.local, if any. */
+    const [serverModel, setServerModel] = useState<{ service: string; model: string } | null>(null);
     const [settings, setSettings] = useState<AISettings | null>(loadSettings);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const connectionButton = useRef<HTMLButtonElement>(null);
@@ -91,7 +81,7 @@ export function App() {
         if (DIRECT) return;
         fetch('/api/status')
             .then((r) => r.json())
-            .then((s) => setServerModel(s && PROVIDERS[s.provider as Provider] ? s : null))
+            .then((s) => setServerModel(s && typeof s.service === 'string' && typeof s.model === 'string' ? s : null))
             .catch(() => setServerModel(null));
     }, []);
 
@@ -237,7 +227,7 @@ export function App() {
                 // A fetch that fails outright from a page is a blocked cross-origin request or no network.
                 push({
                     kind: 'error',
-                    text: `浏览器连不上 ${hostOf(settings)}。这个服务可能不允许网页直接调用（跨域限制），可以在设置里填写一个代理的接口地址；也请检查网络连接。`,
+                    text: `浏览器连不上 ${serviceName(settings.baseUrl)}。这个服务可能不允许网页直接调用（跨域限制），可以在设置里填写一个代理的接口地址；也请检查网络连接。`,
                     fix: '打开设置',
                 });
             } else push({ kind: 'error', text: `出错了：${err instanceof Error ? err.message : String(err)}` });
@@ -258,11 +248,7 @@ export function App() {
         }
     };
 
-    const connection = settings
-        ? modelInfo(settings)
-        : serverModel
-            ? { provider: PROVIDERS[serverModel.provider].label, model: serverModel.model }
-            : null;
+    const connection = settings ? modelInfo(settings) : serverModel;
 
     return (
         <div className="demo">
@@ -284,7 +270,7 @@ export function App() {
                         <span className="connection-dot" aria-hidden />
                         {connection ? (
                             <>
-                                <strong>{connection.provider}</strong>
+                                <strong>{connection.service}</strong>
                                 <span className="connection-model">{connection.model}</span>
                                 {!settings && <span className="connection-model">（.env.local）</span>}
                             </>

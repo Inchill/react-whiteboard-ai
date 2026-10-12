@@ -282,59 +282,11 @@ button:disabled {
     font-weight: 600;
 }
 
-.settings-providers {
-    margin: 0;
-    padding: 0;
-    border: 0;
-}
-
-.settings-providers legend {
-    margin: 0 0 6px;
-    padding: 0;
+.settings-intro {
+    margin: -8px 0 0;
     font-size: 12.5px;
+    line-height: 1.5;
     color: var(--pop-muted);
-}
-
-/* A two-way switch: a sunken track with the chosen option raised. */
-.segmented {
-    display: flex;
-    gap: 4px;
-    padding: 3px;
-    border-radius: 10px;
-    background: var(--pop-field);
-}
-
-.settings-providers label {
-    flex: 1;
-    position: relative;
-    padding: 6px 10px;
-    border-radius: 8px;
-    text-align: center;
-    font-size: 14px;
-    color: var(--pop-muted);
-    cursor: pointer;
-}
-
-.settings-providers label:hover {
-    color: var(--pop-ink);
-}
-
-.settings-providers label.is-on {
-    background: var(--pop-raised);
-    color: var(--pop-ink);
-    font-weight: 600;
-    box-shadow: 0 1px 2px rgba(20, 22, 27, 0.16), 0 0 0 1px rgba(20, 22, 27, 0.04);
-}
-
-.settings-providers input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.settings-providers label:has(input:focus-visible) {
-    outline: 2px solid var(--pop-accent);
-    outline-offset: 1px;
 }
 
 .settings-field {
