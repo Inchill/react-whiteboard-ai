@@ -8,13 +8,13 @@ import type { SketchInput } from '../sketch/sketch';
 export const SKETCH_EXAMPLE: SketchInput = {
     subject: 'a round little bird perched on a branch, side view facing right, wing folded',
     parts: [
-        { name: 'head', x: 52, y: 14, w: 32, h: 32 },
-        { name: 'beak', x: 82, y: 26, w: 11, h: 10 },
+        { name: 'head', on: 'body', x: 52, y: 14, w: 32, h: 32 },
+        { name: 'beak', on: 'head', x: 82, y: 26, w: 11, h: 10 },
         { name: 'eye', x: 69, y: 24, w: 4, h: 4 },
         { name: 'body', x: 18, y: 36, w: 62, h: 46 },
         { name: 'wing', x: 32, y: 48, w: 26, h: 18 },
-        { name: 'tail', x: 6, y: 44, w: 16, h: 20 },
-        { name: 'legs', x: 40, y: 78, w: 22, h: 10 },
+        { name: 'tail', on: 'body', x: 6, y: 44, w: 16, h: 20 },
+        { name: 'legs', on: 'body', x: 40, y: 78, w: 22, h: 10 },
         { name: 'branch', x: 6, y: 84, w: 88, h: 8 },
     ],
     strokes: [
