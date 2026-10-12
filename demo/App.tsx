@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { describeCall } from './describeCall';
@@ -10,7 +10,7 @@ import { clearSettings, loadSettings, modelInfo, PROVIDERS, saveSettings, settin
 type LogEntry =
     | { kind: 'prompt'; text: string; example: boolean }
     | { kind: 'say'; text: string }
-    | { kind: 'thought'; text: string; seconds: number }
+    | { kind: 'thought'; text: string; seconds: number; open: boolean }
     | { kind: 'calls'; calls: ToolCall[]; results: ToolCallResult[] }
     | { kind: 'error'; text: string; auth: boolean };
 
@@ -42,6 +42,13 @@ export function App() {
     // Ticks once a second while the model works, so "thinking for 12 s" stays current.
     const [now, setNow] = useState(() => Date.now());
     const thinking = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+    // Whether the live thinking is expanded; the logged copy keeps that state when the round ends.
+    const [thoughtOpen, setThoughtOpen] = useState(false);
+    const thoughtOpenRef = useRef(false);
+    const toggleThought = () => {
+        thoughtOpenRef.current = !thoughtOpenRef.current;
+        setThoughtOpen(thoughtOpenRef.current);
+    };
     const canAsk = Boolean(settings || serverModel);
 
     useEffect(() => {
@@ -87,6 +94,8 @@ export function App() {
         if (!example) setInput('');
         setBusy(true);
         push({ kind: 'prompt', text: prompt, example });
+        thoughtOpenRef.current = false;
+        setThoughtOpen(false);
         const stop = new AbortController();
         stopRef.current = stop;
         const messages: Message[] = [{ role: 'user', content: `Board:\n${JSON.stringify(ai.describe())}\n\n${prompt}` }];
@@ -126,7 +135,8 @@ export function App() {
                 const thought = message.blocks.map((b) => (b.type === 'thinking' ? b.thinking : '')).join('\n').trim();
                 if (thought) {
                     const t = thinking.current;
-                    push({ kind: 'thought', text: thought, seconds: t.start ? Math.round(((t.end || Date.now()) - t.start) / 1000) : 0 });
+                    const seconds = t.start ? Math.round(((t.end || Date.now()) - t.start) / 1000) : 0;
+                    push({ kind: 'thought', text: thought, seconds, open: thoughtOpenRef.current });
                 }
                 for (const b of message.blocks) if (b.type === 'text' && b.text.trim()) push({ kind: 'say', text: b.text });
                 const calls = message.blocks.flatMap((b) => (b.type === 'tool_use' ? [{ id: b.id, name: b.name, input: b.input }] : []));
@@ -227,6 +237,8 @@ export function App() {
                     {live && (
                         <LiveReply
                             message={live}
+                            thoughtOpen={thoughtOpen}
+                            onToggleThought={toggleThought}
                             thinkingSeconds={thinking.current.start ? Math.max(0, Math.round((now - thinking.current.start) / 1000)) : 0}
                         />
                     )}
@@ -300,7 +312,7 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
         case 'say':
             return <p className="say">{entry.text}</p>;
         case 'thought':
-            return <Thought text={entry.text} seconds={entry.seconds} live={false} />;
+            return <Thought text={entry.text} seconds={entry.seconds} live={false} defaultOpen={entry.open} />;
         case 'error':
             return (
                 <div className="op op-error">
@@ -354,7 +366,9 @@ const PENDING: Record<string, [string, string]> = {
 };
 
 /** The reply as it streams in: text grows word by word, tool calls show how far along they are. */
-function LiveReply({ message, thinkingSeconds }: { message: LiveMessage; thinkingSeconds: number }) {
+type LiveReplyProps = { message: LiveMessage; thinkingSeconds: number; thoughtOpen: boolean; onToggleThought: () => void };
+
+function LiveReply({ message, thinkingSeconds, thoughtOpen, onToggleThought }: LiveReplyProps) {
     return (
         <>
             {message.blocks.map((b, i) => {
@@ -371,7 +385,16 @@ function LiveReply({ message, thinkingSeconds }: { message: LiveMessage; thinkin
                 if (b.type === 'thinking') {
                     // Reasoning models (DeepSeek V4 among them) think before answering; keep it to one quiet line.
                     const writing = i === message.blocks.length - 1;
-                    return <Thought key={i} text={b.thinking} seconds={thinkingSeconds} live={writing} />;
+                    return (
+                        <Thought
+                            key={i}
+                            text={b.thinking}
+                            seconds={thinkingSeconds}
+                            live={writing}
+                            open={thoughtOpen}
+                            onToggle={onToggleThought}
+                        />
+                    );
                 }
                 if (b.type === 'tool_use') {
                     const [label, unit] = PENDING[b.name] ?? [`正在调用 ${b.name}`, '项'];
@@ -392,24 +415,68 @@ function LiveReply({ message, thinkingSeconds }: { message: LiveMessage; thinkin
     );
 }
 
+type ThoughtProps = {
+    text: string;
+    seconds: number;
+    /** Still being written. */
+    live: boolean;
+    /** Controlled open state (the live thought); otherwise the component keeps its own. */
+    open?: boolean;
+    onToggle?: () => void;
+    defaultOpen?: boolean;
+};
+
 /**
  * A model's reasoning, folded to one line: a spinner and a timer while it thinks, with the latest
- * words peeking through; afterwards "thought for 12 s". The full text opens on click.
+ * words peeking through; afterwards "thought for 12 s". Expand / collapse shows the full text,
+ * which follows new words while it streams unless the reader has scrolled up.
  */
-function Thought({ text, seconds, live }: { text: string; seconds: number; live: boolean }) {
-    const [open, setOpen] = useState(false);
+function Thought({ text, seconds, live, open: controlled, onToggle, defaultOpen = false }: ThoughtProps) {
+    const id = useId();
+    const [own, setOwn] = useState(defaultOpen);
+    const open = controlled ?? own;
+    const toggle = onToggle ?? (() => setOwn((o) => !o));
+    const full = useRef<HTMLDivElement>(null);
+    const followBottom = useRef(true);
     const tail = text.replace(/\s+/g, ' ').trim().slice(-90);
+
+    useEffect(() => {
+        const el = full.current;
+        if (el && live && followBottom.current) el.scrollTop = el.scrollHeight;
+    }, [text, live, open]);
+
     return (
         <div className={`thought${live ? ' is-live' : ''}`}>
-            <button type="button" className="thought-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-                {live ? <span className="spinner" aria-hidden /> : <span className="thought-chevron" aria-hidden />}
-                {live ? `正在思考，已 ${seconds} 秒` : seconds ? `思考了 ${seconds} 秒` : '思考过程'}
+            <button type="button" className="thought-toggle" aria-expanded={open} aria-controls={id} onClick={toggle}>
+                <span className="thought-status">
+                    {live && <span className="spinner" aria-hidden />}
+                    {live ? `正在思考，已 ${seconds} 秒` : seconds ? `思考了 ${seconds} 秒` : '思考过程'}
+                </span>
+                <span className="thought-action">
+                    {open ? '收起' : '展开'}
+                    <span className="thought-chevron" aria-hidden />
+                </span>
             </button>
-            {open ? <p className="thought-full">{text}</p> : live && tail && (
-                <p className="thought-peek">
-                    {/* Right-aligned and clipped on the left, so the newest words stay in view. */}
-                    <span dir="ltr">{tail}</span>
-                </p>
+            {open ? (
+                <div
+                    id={id}
+                    ref={full}
+                    className="thought-full"
+                    onScroll={(e) => {
+                        const el = e.currentTarget;
+                        followBottom.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+                    }}
+                >
+                    {text}
+                </div>
+            ) : (
+                live &&
+                tail && (
+                    <p className="thought-peek">
+                        {/* Right-aligned and clipped on the left, so the newest words stay in view. */}
+                        <span dir="ltr">{tail}</span>
+                    </p>
+                )
             )}
         </div>
     );
