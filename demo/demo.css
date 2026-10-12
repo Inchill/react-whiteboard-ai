@@ -204,15 +204,16 @@ button:disabled {
     position: relative;
 }
 
-/* A dark card that floats over the panel, pointing at the connection button. It stays dark in
-   both themes; in dark mode it is lifted a step above the page and outlined so the layers read. */
+/* A card that floats over the panel, pointing at the connection button. It follows the theme and
+   separates from the panel by its shadow; in dark mode it is lifted a step and outlined. */
 .popover {
-    --pop-bg: #1b1d23;
-    --pop-field: #262932;
-    --pop-line: rgba(255, 255, 255, 0.12);
-    --pop-ink: #f1f3f5;
-    --pop-muted: #a3a9b6;
-    --pop-accent: #7d97ff;
+    --pop-bg: #ffffff;
+    --pop-field: #f3f5f8;
+    --pop-line: rgba(20, 22, 27, 0.14);
+    --pop-ink: var(--ink);
+    --pop-muted: var(--muted);
+    --pop-accent: var(--blue);
+    --pop-raised: #ffffff;
     position: absolute;
     top: calc(100% - 6px);
     right: 16px;
@@ -222,14 +223,14 @@ button:disabled {
     background: var(--pop-bg);
     color: var(--pop-ink);
     box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.04),
-        0 4px 10px rgba(16, 18, 24, 0.12),
-        0 22px 48px -12px rgba(16, 18, 24, 0.42);
+        0 0 0 1px rgba(20, 22, 27, 0.08),
+        0 4px 12px rgba(20, 22, 27, 0.08),
+        0 24px 48px -16px rgba(20, 22, 27, 0.28);
     transform-origin: calc(100% - 40px) 0;
     animation: pop-in 0.14s ease-out;
 }
 
-/* The small pointer under the connection button. */
+/* The small pointer under the connection button, outlined like the card. */
 .popover::before {
     content: '';
     position: absolute;
@@ -239,13 +240,20 @@ button:disabled {
     height: 12px;
     border-radius: 2px;
     background: var(--pop-bg);
+    box-shadow: -1px -1px 0 rgba(20, 22, 27, 0.08);
     transform: rotate(45deg);
 }
 
 @media (prefers-color-scheme: dark) {
+    .popover::before {
+        box-shadow: -1px -1px 0 rgba(255, 255, 255, 0.08);
+    }
+
     .popover {
         --pop-bg: #262932;
-        --pop-field: #31353f;
+        --pop-field: #1f222a;
+        --pop-line: rgba(255, 255, 255, 0.12);
+        --pop-raised: #353a45;
         box-shadow:
             0 0 0 1px rgba(255, 255, 255, 0.08),
             0 4px 10px rgba(0, 0, 0, 0.3),
@@ -312,10 +320,10 @@ button:disabled {
 }
 
 .settings-providers label.is-on {
-    background: var(--pop-bg);
+    background: var(--pop-raised);
     color: var(--pop-ink);
     font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 1px 2px rgba(20, 22, 27, 0.16), 0 0 0 1px rgba(20, 22, 27, 0.04);
 }
 
 .settings-providers input {
@@ -349,13 +357,14 @@ button:disabled {
 }
 
 .settings-field input::placeholder {
-    color: #7d8494;
+    color: var(--pop-muted);
+    opacity: 0.8;
 }
 
 .settings-field input:focus {
     outline: none;
     border-color: var(--pop-accent);
-    box-shadow: 0 0 0 3px rgba(125, 151, 255, 0.25);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pop-accent) 22%, transparent);
 }
 
 .settings-check {
@@ -386,11 +395,6 @@ button:disabled {
     padding-top: 4px;
 }
 
-.settings .button-primary {
-    background: var(--pop-accent);
-    color: #11131a;
-}
-
 .settings-actions > button:not(.button-primary):not(.button-quiet) {
     border: 1px solid var(--pop-line);
     border-radius: 10px;
@@ -400,7 +404,7 @@ button:disabled {
 }
 
 .settings-actions > button:not(.button-primary):not(.button-quiet):hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--pop-field);
 }
 
 .settings-actions .button-quiet {
