@@ -27,10 +27,16 @@ export type Target = {
     baseUrl?: string;
 };
 
-/** Accepts a base ("https://host/anthropic") or a full ".../v1/messages" URL. */
+/**
+ * Accepts a base ("https://host/anthropic"), a base ending in "/v1", or a full ".../v1/messages" URL.
+ * DeepSeek's usual (OpenAI-style) address, "https://api.deepseek.com" or ".../v1", has no Messages
+ * API, so it is mapped to the Anthropic-compatible endpoint on the same host.
+ */
 export function messagesUrl(t: Pick<Target, 'provider' | 'baseUrl'>): string {
-    const base = (t.baseUrl?.trim() || ENDPOINTS[t.provider].base).replace(/\/+$/, '');
-    return base.endsWith('/v1/messages') ? base : `${base}/v1/messages`;
+    let base = (t.baseUrl?.trim() || ENDPOINTS[t.provider].base).replace(/\/+$/, '');
+    if (/^https?:\/\/api\.deepseek\.com(\/v1)?$/i.test(base)) base = ENDPOINTS.deepseek.base;
+    if (base.endsWith('/v1/messages')) return base;
+    return base.endsWith('/v1') ? `${base}/messages` : `${base}/v1/messages`;
 }
 
 export const modelOf = (t: Pick<Target, 'provider' | 'model'>) => t.model?.trim() || ENDPOINTS[t.provider].model;
