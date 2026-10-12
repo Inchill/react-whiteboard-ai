@@ -319,6 +319,98 @@ button:disabled {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--pop-accent) 22%, transparent);
 }
 
+/* The endpoint field: an input with a list of common endpoints. */
+.combo {
+    position: relative;
+}
+
+.settings-field .combo input {
+    padding-right: 38px;
+}
+
+.combo-toggle {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-top: -14px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--pop-muted);
+    cursor: pointer;
+}
+
+.combo-toggle:hover {
+    background: color-mix(in srgb, var(--pop-ink) 8%, transparent);
+    color: var(--pop-ink);
+}
+
+.combo-toggle svg {
+    transition: transform 0.15s ease;
+}
+
+.combo-toggle.is-open svg {
+    transform: rotate(180deg);
+}
+
+.combo-list {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 1;
+    max-height: 240px;
+    margin: 0;
+    padding: 4px;
+    overflow-y: auto;
+    list-style: none;
+    border-radius: 10px;
+    background: var(--pop-raised);
+    box-shadow:
+        0 0 0 1px var(--pop-line),
+        0 8px 24px -6px rgba(20, 22, 27, 0.22);
+}
+
+.combo-list li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.combo-list li.is-active {
+    background: color-mix(in srgb, var(--pop-accent) 12%, transparent);
+}
+
+.combo-name {
+    flex: none;
+    width: 4.5em;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--pop-ink);
+}
+
+.combo-url {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--pop-muted);
+}
+
+.combo-list li[aria-selected='true'] .combo-name {
+    color: var(--pop-accent);
+}
+
 .settings-check {
     display: flex;
     align-items: center;
@@ -706,6 +798,7 @@ button:disabled {
     }
 
     .thought-chevron,
+    .combo-toggle svg,
     .switch-track,
     .switch-track::after {
         transition: none;

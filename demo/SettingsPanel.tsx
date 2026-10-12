@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from 'react';
-import { KNOWN_ENDPOINTS, serviceName } from './modelRequest';
+import { EndpointField } from './EndpointField';
+import { serviceName } from './modelRequest';
 import type { AISettings } from './settings';
 
 type Props = {
@@ -36,23 +37,7 @@ export function SettingsPanel({ settings, hasServerKey, direct, onSave, onClear,
             <h2 id={`${id}-title`}>连接模型</h2>
             <p className="settings-intro">支持 Anthropic 消息格式的接口都能用，比如 Claude、DeepSeek、千问、智谱、豆包。</p>
 
-            <label className="settings-field">
-                <span>接口地址</span>
-                <input
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="https://api.deepseek.com/anthropic"
-                    list={`${id}-endpoints`}
-                    spellCheck={false}
-                    inputMode="url"
-                    autoFocus
-                />
-                <datalist id={`${id}-endpoints`}>
-                    {KNOWN_ENDPOINTS.map((e) => (
-                        <option key={e.url} value={e.url} label={e.name} />
-                    ))}
-                </datalist>
-            </label>
+            <EndpointField value={baseUrl} onChange={setBaseUrl} autoFocus />
 
             <label className="settings-field">
                 <span>API key</span>
