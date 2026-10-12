@@ -59,22 +59,27 @@ The tool result maps each node id to the box drawn for it (`nodes: { gw: "s12", 
 
 ```json
 {
-    "width": 100,
-    "height": 100,
-    "size": 240,
+    "subject": "a smiling face, front view",
+    "parts": [
+        { "name": "face", "x": 12, "y": 12, "w": 76, "h": 80 },
+        { "name": "eyes", "x": 30, "y": 44, "w": 40, "h": 12 },
+        { "name": "mouth", "x": 36, "y": 66, "w": 28, "h": 12 }
+    ],
     "strokes": [
-        { "d": "M50 12 C78 12 88 34 88 56 C88 80 70 92 50 92 C30 92 12 80 12 56 C12 34 22 12 50 12 Z", "width": 4 },
-        { "d": "M36 50 A4 4 0 1 1 36.1 50 M64 50 A4 4 0 1 1 64.1 50" },
-        { "d": "M38 70 Q50 80 62 70" }
-    ]
+        { "part": "face", "d": "M50 12 C78 12 88 34 88 56 C88 80 70 92 50 92 C30 92 12 80 12 56 C12 34 22 12 50 12 Z", "width": 4 },
+        { "part": "eyes", "d": "M36 50 A4 4 0 1 1 36.1 50 M64 50 A4 4 0 1 1 64.1 50" },
+        { "part": "mouth", "d": "M38 70 Q50 80 62 70" }
+    ],
+    "size": 240
 }
 ```
 
+- **Plan first**: the model states the `subject` (what it is, the view, the pose), then a box for each part, then the strokes, each tagged with its part. The tool checks that every stroke stays near its part's box and that every part gets drawn. When they disagree, for example a tail drawn across the face, the call fails with the exact stroke and position, and the model fixes it in the next round. Planning the layout before writing coordinates matters most for models without a reasoning mode.
 - **Paths**: paths are written in their own coordinate box (default 100 × 100, y down) and scaled so the longest side is `size` on the board. Every SVG path command works: `M L H V C S Q T A Z`, absolute and relative.
 - **Strokes**: each `M` starts a new pen stroke. The stroke gets a natural hand-drawn line: it is thinner at the ends, with a slight wobble, and closed loops overlap a little where they meet. The variation comes from a seed derived from the paths, so the same input always draws the same way.
 - **Result**: the result is ordinary pen shapes, so users can move, recolor or erase them like their own strokes.
 
-It draws lines only, with no fills. How good the picture is depends on the model; reasoning models (or the demo's deep-thinking switch) draw noticeably better.
+It draws lines only, with no fills. The system prompt teaches a drawing method with a worked example, but how good the picture is still depends on the model; reasoning models (or the demo's deep-thinking switch) draw noticeably better. `sketchToShapes` on its own does not need `subject` or `parts`.
 
 ## Install
 
