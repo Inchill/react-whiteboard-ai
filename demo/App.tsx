@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { describeCall } from './describeCall';
-import { EXAMPLES, type Example } from './examples';
+import { EXAMPLES } from './examples';
 import { SettingsPanel } from './SettingsPanel';
 import { countSoFar, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
 import { clearSettings, loadSettings, modelInfo, PROVIDERS, saveSettings, settingsHeaders, type AISettings, type Provider } from './settings';
 
 type LogEntry =
-    | { kind: 'prompt'; text: string; canned: boolean }
+    | { kind: 'prompt'; text: string; example: boolean }
     | { kind: 'say'; text: string }
     | { kind: 'calls'; calls: ToolCall[]; results: ToolCallResult[] }
     | { kind: 'error'; text: string; auth: boolean };
@@ -66,22 +66,17 @@ export function App() {
         return results;
     };
 
-    const runExample = (ex: Example) => {
-        const description = ai.describe();
-        if (!description) return;
-        push({ kind: 'prompt', text: ex.prompt, canned: true });
-        const calls = ex.calls(description);
-        if (calls.length) run(calls);
-        else push({ kind: 'say', text: '画布上还没有东西。先画几笔，或者试试“画一个登录流程图”。' });
-    };
-
-    async function ask(e?: FormEvent) {
-        e?.preventDefault();
-        const prompt = input.trim();
-        if (!prompt || busy || !canAsk) return;
-        setInput('');
+    /** Send a prompt to the model: the composer's text, or an example's. */
+    async function ask(prompt: string, example = false) {
+        prompt = prompt.trim();
+        if (!prompt || busy) return;
+        if (!canAsk) {
+            setSettingsOpen(true);
+            return;
+        }
+        if (!example) setInput('');
         setBusy(true);
-        push({ kind: 'prompt', text: prompt, canned: false });
+        push({ kind: 'prompt', text: prompt, example });
         const stop = new AbortController();
         stopRef.current = stop;
         const messages: Message[] = [{ role: 'user', content: `Board:\n${JSON.stringify(ai.describe())}\n\n${prompt}` }];
@@ -137,7 +132,7 @@ export function App() {
         // Enter sends, Shift+Enter breaks the line; never send while an IME is composing (Chinese input).
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            void ask();
+            void ask(input);
         }
     };
 
@@ -200,7 +195,7 @@ export function App() {
                             <p className="log-empty-hand">告诉我要在白板上画什么</p>
                             <p>
                                 比如“画一个三步的注册流程”“把所有框改成蓝色”。
-                                {canAsk ? '' : '还没连接模型的话，可以先点下面的示例看效果。'}
+                                {canAsk ? '也可以直接点下面的示例。' : '先在右上角连接模型（DeepSeek 或 Claude），再输入指令或点下面的示例。'}
                             </p>
                         </div>
                     )}
@@ -216,11 +211,17 @@ export function App() {
                     <div ref={logEnd} />
                 </section>
 
-                <form onSubmit={ask} className="composer">
+                <form
+                    className="composer"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        void ask(input);
+                    }}
+                >
                     <div className="composer-examples" role="group" aria-label="示例">
-                        <span>示例</span>
+                        <span>试试</span>
                         {EXAMPLES.map((ex) => (
-                            <button key={ex.label} type="button" onClick={() => runExample(ex)} disabled={busy}>
+                            <button key={ex.label} type="button" onClick={() => void ask(ex.prompt, true)} disabled={busy} title={ex.prompt}>
                                 {ex.label}
                             </button>
                         ))}
@@ -263,7 +264,7 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
             return (
                 <div className={`note${index % 2 ? ' note-tilt' : ''}`}>
                     <p>{entry.text}</p>
-                    {entry.canned && <span className="note-tag">示例</span>}
+                    {entry.example && <span className="note-tag">示例</span>}
                 </div>
             );
         case 'say':
