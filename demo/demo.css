@@ -198,15 +198,74 @@ button:disabled {
     background: var(--green);
 }
 
-/* ---- settings ---- */
+/* ---- settings popover ---- */
+
+.panel-head {
+    position: relative;
+}
+
+/* A dark card that floats over the panel, pointing at the connection button. It stays dark in
+   both themes; in dark mode it is lifted a step above the page and outlined so the layers read. */
+.popover {
+    --pop-bg: #1b1d23;
+    --pop-field: #262932;
+    --pop-line: rgba(255, 255, 255, 0.12);
+    --pop-ink: #f1f3f5;
+    --pop-muted: #a3a9b6;
+    --pop-accent: #7d97ff;
+    position: absolute;
+    top: calc(100% - 6px);
+    right: 16px;
+    z-index: 20;
+    width: min(360px, calc(100vw - 32px));
+    border-radius: 14px;
+    background: var(--pop-bg);
+    color: var(--pop-ink);
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.04),
+        0 4px 10px rgba(16, 18, 24, 0.12),
+        0 22px 48px -12px rgba(16, 18, 24, 0.42);
+    transform-origin: calc(100% - 40px) 0;
+    animation: pop-in 0.14s ease-out;
+}
+
+/* The small pointer under the connection button. */
+.popover::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    right: 36px;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--pop-bg);
+    transform: rotate(45deg);
+}
+
+@media (prefers-color-scheme: dark) {
+    .popover {
+        --pop-bg: #262932;
+        --pop-field: #31353f;
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.08),
+            0 4px 10px rgba(0, 0, 0, 0.3),
+            0 24px 56px -12px rgba(0, 0, 0, 0.7);
+    }
+}
+
+@keyframes pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.98);
+    }
+}
 
 .settings {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    padding: 18px 20px 20px;
-    background: var(--surface-sunk);
-    border-bottom: 1px solid var(--line);
+    padding: 18px 18px 16px;
 }
 
 .settings h2 {
@@ -216,35 +275,47 @@ button:disabled {
 }
 
 .settings-providers {
-    display: flex;
-    gap: 6px;
     margin: 0;
     padding: 0;
     border: 0;
 }
 
 .settings-providers legend {
-    margin-bottom: 6px;
-    font-size: 13px;
-    color: var(--muted);
+    margin: 0 0 6px;
+    padding: 0;
+    font-size: 12.5px;
+    color: var(--pop-muted);
+}
+
+/* A two-way switch: a sunken track with the chosen option raised. */
+.segmented {
+    display: flex;
+    gap: 4px;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--pop-field);
 }
 
 .settings-providers label {
     flex: 1;
     position: relative;
-    padding: 7px 10px;
-    border: 1px solid var(--line-strong);
-    border-radius: 10px;
-    background: var(--surface);
+    padding: 6px 10px;
+    border-radius: 8px;
     text-align: center;
     font-size: 14px;
+    color: var(--pop-muted);
     cursor: pointer;
 }
 
+.settings-providers label:hover {
+    color: var(--pop-ink);
+}
+
 .settings-providers label.is-on {
-    border-color: var(--blue);
-    box-shadow: inset 0 0 0 1px var(--blue);
+    background: var(--pop-bg);
+    color: var(--pop-ink);
     font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .settings-providers input {
@@ -254,35 +325,37 @@ button:disabled {
 }
 
 .settings-providers label:has(input:focus-visible) {
-    outline: 2px solid var(--blue);
-    outline-offset: 2px;
+    outline: 2px solid var(--pop-accent);
+    outline-offset: 1px;
 }
 
 .settings-field {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-size: 13px;
-    color: var(--muted);
+    font-size: 12.5px;
+    color: var(--pop-muted);
 }
 
-.settings-field input,
-.composer textarea {
+.settings-field input {
     width: 100%;
     font: inherit;
     font-size: 14px;
-    color: var(--ink);
-    background: var(--surface);
-    border: 1px solid var(--line-strong);
+    color: var(--pop-ink);
+    background: var(--pop-field);
+    border: 1px solid var(--pop-line);
     border-radius: 10px;
     padding: 8px 12px;
 }
 
-.settings-field input:focus,
-.composer textarea:focus {
+.settings-field input::placeholder {
+    color: #7d8494;
+}
+
+.settings-field input:focus {
     outline: none;
-    border-color: var(--blue);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent);
+    border-color: var(--pop-accent);
+    box-shadow: 0 0 0 3px rgba(125, 151, 255, 0.25);
 }
 
 .settings-check {
@@ -296,32 +369,52 @@ button:disabled {
     width: 16px;
     height: 16px;
     margin: 0;
-    accent-color: var(--blue);
+    accent-color: var(--pop-accent);
 }
 
 .settings-note {
     margin: -6px 0 0;
-    font-size: 12.5px;
+    font-size: 12px;
     line-height: 1.5;
-    color: var(--muted);
+    color: var(--pop-muted);
 }
 
 .settings-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+.settings .button-primary {
+    background: var(--pop-accent);
+    color: #11131a;
 }
 
 .settings-actions > button:not(.button-primary):not(.button-quiet) {
-    border: 1px solid var(--line-strong);
+    border: 1px solid var(--pop-line);
     border-radius: 10px;
     padding: 7px 14px;
-    background: var(--surface);
+    background: none;
+    color: var(--pop-ink);
+}
+
+.settings-actions > button:not(.button-primary):not(.button-quiet):hover {
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .settings-actions .button-quiet {
     margin-left: auto;
-    font-size: 13px;
+    font-size: 12.5px;
+    color: var(--pop-muted);
+}
+
+.settings-actions .button-quiet:hover {
+    color: var(--pop-ink);
+}
+
+.settings :focus-visible {
+    outline-color: var(--pop-accent);
 }
 
 /* ---- log ---- */
@@ -649,6 +742,10 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
     .spinner,
     .say-live::after {
+        animation: none;
+    }
+
+    .popover {
         animation: none;
     }
 

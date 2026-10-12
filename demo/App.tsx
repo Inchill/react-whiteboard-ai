@@ -46,6 +46,12 @@ export function App() {
     const [serverModel, setServerModel] = useState<{ provider: Provider; model: string } | null>(null);
     const [settings, setSettings] = useState<AISettings | null>(loadSettings);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const connectionButton = useRef<HTMLButtonElement>(null);
+    const popover = useRef<HTMLDivElement>(null);
+    const closeSettings = (refocus = true) => {
+        setSettingsOpen(false);
+        if (refocus) connectionButton.current?.focus();
+    };
     const [deepThinking, setDeepThinking] = useState(loadThinking);
     const [exampleGroup, setExampleGroup] = useState(loadExampleGroup);
     const examples = EXAMPLE_GROUPS.find((g) => g.id === exampleGroup) ?? EXAMPLE_GROUPS[0];
@@ -81,6 +87,24 @@ export function App() {
     useEffect(() => {
         if (fitRequest) board.current?.zoomToFit();
     }, [fitRequest]);
+
+    // The settings popover closes on Escape and on a click anywhere outside it (except its own button).
+    useEffect(() => {
+        if (!settingsOpen) return;
+        const onKey = (e: globalThis.KeyboardEvent) => {
+            if (e.key === 'Escape') closeSettings();
+        };
+        const onDown = (e: PointerEvent) => {
+            const target = e.target as Node;
+            if (!popover.current?.contains(target) && !connectionButton.current?.contains(target)) closeSettings(false);
+        };
+        window.addEventListener('keydown', onKey);
+        window.addEventListener('pointerdown', onDown);
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            window.removeEventListener('pointerdown', onDown);
+        };
+    }, [settingsOpen]);
 
     useEffect(() => {
         if (!busy) return;
@@ -220,10 +244,12 @@ export function App() {
                 <header className="panel-head">
                     <h1>react-whiteboard-ai</h1>
                     <button
+                        ref={connectionButton}
                         type="button"
                         className={`connection${connection ? ' is-on' : ''}`}
                         aria-expanded={settingsOpen}
-                        onClick={() => setSettingsOpen((o) => !o)}
+                        aria-haspopup="dialog"
+                        onClick={() => (settingsOpen ? closeSettings() : setSettingsOpen(true))}
                     >
                         <span className="connection-dot" aria-hidden />
                         {connection ? (
@@ -236,26 +262,27 @@ export function App() {
                             <strong>连接模型</strong>
                         )}
                     </button>
+                    {settingsOpen && (
+                        <div ref={popover} className="popover" role="dialog" aria-label="连接模型">
+                            <SettingsPanel
+                                settings={settings}
+                                hasServerKey={Boolean(serverModel)}
+                                onSave={(s) => {
+                                    saveSettings(s);
+                                    setSettings(s);
+                                    closeSettings(false);
+                                    composer.current?.focus();
+                                }}
+                                onClear={() => {
+                                    clearSettings();
+                                    setSettings(null);
+                                    closeSettings();
+                                }}
+                                onClose={() => closeSettings()}
+                            />
+                        </div>
+                    )}
                 </header>
-
-                {settingsOpen && (
-                    <SettingsPanel
-                        settings={settings}
-                        hasServerKey={Boolean(serverModel)}
-                        onSave={(s) => {
-                            saveSettings(s);
-                            setSettings(s);
-                            setSettingsOpen(false);
-                            composer.current?.focus();
-                        }}
-                        onClear={() => {
-                            clearSettings();
-                            setSettings(null);
-                            setSettingsOpen(false);
-                        }}
-                        onClose={() => setSettingsOpen(false)}
-                    />
-                )}
 
                 <section className="log" aria-live="polite" aria-label="操作记录">
                     {log.length === 0 && (

@@ -32,12 +32,14 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
 
             <fieldset className="settings-providers">
                 <legend>服务商</legend>
-                {(Object.keys(PROVIDERS) as Provider[]).map((p) => (
-                    <label key={p} className={p === provider ? 'is-on' : undefined}>
-                        <input type="radio" name={`${id}-provider`} value={p} checked={p === provider} onChange={() => setProvider(p)} />
-                        {PROVIDERS[p].label}
-                    </label>
-                ))}
+                <div className="segmented">
+                    {(Object.keys(PROVIDERS) as Provider[]).map((p) => (
+                        <label key={p} className={p === provider ? 'is-on' : undefined}>
+                            <input type="radio" name={`${id}-provider`} value={p} checked={p === provider} onChange={() => setProvider(p)} />
+                            {PROVIDERS[p].label}
+                        </label>
+                    ))}
+                </div>
             </fieldset>
 
             <label className="settings-field">
