@@ -23,6 +23,8 @@ export function App() {
     const [busy, setBusy] = useState(false);
     const [model, setModel] = useState<string | null | undefined>(undefined);
     const logEnd = useRef<HTMLDivElement>(null);
+    // Bumped after each AI turn; the effect below fits the view once React has rendered the new shapes.
+    const [fitRequest, setFitRequest] = useState(0);
 
     useEffect(() => {
         fetch('/api/status')
@@ -37,12 +39,16 @@ export function App() {
         logEnd.current?.scrollIntoView({ block: 'end' });
     }, [log]);
 
+    useEffect(() => {
+        if (fitRequest) board.current?.zoomToFit();
+    }, [fitRequest]);
+
     const push = (entry: LogEntry) => setLog((l) => [...l, entry]);
 
     const run = (calls: ToolCall[]) => {
         const results = ai.execute(calls);
         push({ kind: 'calls', calls, results });
-        requestAnimationFrame(() => board.current?.zoomToFit());
+        setFitRequest((n) => n + 1);
         return results;
     };
 
