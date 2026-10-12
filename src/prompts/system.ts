@@ -52,7 +52,7 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         'How to work:',
         '- Refer to existing shapes only by the ids you were given. Never invent ids.',
         '- Put new content next to existing content, with roughly 40 units of space, unless the user asks for a specific place.',
-        '- Keep sizes consistent with what is already on the board. Typical text is 24 units; a typical box is 120–240 units wide.',
+        '- Keep sizes consistent with what is already on the board. Typical text is 20 units; a typical box is 120–240 units wide.',
         '- Prefer one tool call with many shapes over many calls with one shape each.',
         '- If a tool result reports errors, fix only the failed items and try again.',
         '- When you are done, reply with one short sentence about what you changed, in the language the user wrote in.',

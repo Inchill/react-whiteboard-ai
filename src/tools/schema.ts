@@ -10,10 +10,10 @@ export type ToolDefinition = {
 
 const num = (description: string, extra: Record<string, unknown> = {}) => ({ type: 'number', description, ...extra });
 const color = { type: 'string', description: '"ink" (theme foreground, the default) or a hex color such as "#e03131".' };
-const strokeWidth = num('Stroke width in world units. Default 4.', { minimum: LIMITS.strokeWidth.min, maximum: LIMITS.strokeWidth.max });
+const strokeWidth = num('Stroke width in world units. Default 2.', { minimum: LIMITS.strokeWidth.min, maximum: LIMITS.strokeWidth.max });
 const strokeStyle = { type: 'string', enum: ['solid', 'dashed', 'dotted'], description: 'Default "solid".' };
 const fill = { type: 'string', enum: ['none', 'semi', 'solid'], description: 'Fill with the shape color: none, translucent or opaque. Default "none".' };
-const fontSize = num('Font size in world units. Default 24.', { minimum: LIMITS.fontSize.min, maximum: LIMITS.fontSize.max });
+const fontSize = num('Font size in world units. Default 20.', { minimum: LIMITS.fontSize.min, maximum: LIMITS.fontSize.max });
 
 const boxShape = {
     type: 'object',

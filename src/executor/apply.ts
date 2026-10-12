@@ -2,7 +2,8 @@ import { createId as defaultCreateId, measureText, translateShape } from '../geo
 import { parseOperation } from '../tools/validate';
 import { INK, type Operation, type Shape, type ShapeInput, type ShapePatch } from '../types';
 
-export const DEFAULTS = { color: INK, strokeWidth: 4, strokeStyle: 'solid', fill: 'none', fontSize: 24 } as const;
+/** Defaults for shapes a model adds: a lighter line and smaller text than hand drawing, which suits diagrams. */
+export const DEFAULTS = { color: INK, strokeWidth: 2, strokeStyle: 'solid', fill: 'none', fontSize: 20 } as const;
 
 export type OperationResult = {
     op: Operation['op'];

@@ -22,10 +22,10 @@ describe('applyOperations', () => {
         expect(before).toEqual([rect]);
         expect(results[0].created).toEqual(['new1', 'new2']);
         expect(shapes[1]).toEqual({
-            id: 'new1', type: 'ellipse', x: 0, y: 100, w: 40, h: 40, fill: 'none', color: 'ink', strokeWidth: 4, strokeStyle: 'solid',
+            id: 'new1', type: 'ellipse', x: 0, y: 100, w: 40, h: 40, fill: 'none', color: 'ink', strokeWidth: 2, strokeStyle: 'solid',
         });
         // Text gets measured so the board can hit-test and select it.
-        expect(shapes[2]).toMatchObject({ type: 'text', fontSize: 24, h: 30 });
+        expect(shapes[2]).toMatchObject({ type: 'text', fontSize: 20, h: 25 });
         expect((shapes[2] as Extract<Shape, { type: 'text' }>).w).toBeGreaterThan(0);
     });
 
