@@ -1,5 +1,6 @@
 import type { DiagramEdge, DiagramInput, DiagramNode } from '../layout/diagram';
 import { JOIN, nearest } from '../sketch/join';
+import { smoothPath } from '../sketch/smooth';
 import { parsePath, samplePath, type Pt } from '../sketch/path';
 import { SKETCH_DEFAULTS, type SketchInput, type SketchPart, type SketchStroke } from '../sketch/sketch';
 import type { Operation, OperationName, ShapeInput, ShapePatch } from '../types';
@@ -12,7 +13,7 @@ export const LIMITS = {
     textLength: 2000,
     itemsPerOperation: 200,
     diagram: { nodes: 60, edges: 120, labelLength: 80, idLength: 40 },
-    sketch: { parts: 30, partName: 40, subjectLength: 200, strokes: 120, pathLength: 4000, totalPathLength: 40000, width: { min: 1, max: 16 }, size: { min: 40, max: 2000 } },
+    sketch: { pointsPerStroke: 200, parts: 30, partName: 40, subjectLength: 200, strokes: 120, pathLength: 4000, totalPathLength: 40000, width: { min: 1, max: 16 }, size: { min: 40, max: 2000 } },
 } as const;
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; errors: string[] };
@@ -280,6 +281,53 @@ function parseDiagram(c: Checker, input: Obj): DiagramInput | undefined {
     return clean({ direction, nodes, edges, x, y });
 }
 
+/** A stroke's line: SVG path data in `d`, or `points` with an optional `closed`. Exactly one of the two. */
+function parseLine(c: Checker, item: Obj, path: string): Pick<SketchStroke, 'd' | 'points' | 'closed'> | undefined {
+    const L = LIMITS.sketch;
+    if (item.d !== undefined && item.points !== undefined) {
+        c.fail(path, 'give either d or points, not both');
+        return undefined;
+    }
+    if (item.d === undefined && item.points === undefined) {
+        c.fail(path, 'needs d (SVG path data) or points');
+        return undefined;
+    }
+    if (item.d !== undefined) {
+        if (item.closed !== undefined) c.fail(`${path}.closed`, 'only applies to points; close a path with Z');
+        const d = c.text(item, 'd', path, true);
+        if (d === undefined) return undefined;
+        if (d.length > L.pathLength) {
+            c.fail(`${path}.d`, `is longer than ${L.pathLength} characters; split it into several strokes`);
+            return undefined;
+        }
+        return { d };
+    }
+    const before = c.errors.length;
+    let closed: boolean | undefined;
+    if (item.closed !== undefined) {
+        if (typeof item.closed === 'boolean') closed = item.closed;
+        else c.fail(`${path}.closed`, 'expected true or false');
+    }
+    const raw = item.points;
+    if (!Array.isArray(raw) || raw.length < 2) {
+        c.fail(`${path}.points`, 'expected at least 2 points, each [x, y]');
+        return undefined;
+    }
+    if (raw.length > L.pointsPerStroke) {
+        c.fail(`${path}.points`, `has more than ${L.pointsPerStroke} points`);
+        return undefined;
+    }
+    if (closed && raw.length < 3) c.fail(`${path}.points`, 'a closed line needs at least 3 points');
+    const points: [number, number][] = [];
+    raw.forEach((p, i) => {
+        const ok = Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= LIMITS.coordinate);
+        if (ok) points.push([p[0], p[1]]);
+        else c.fail(`${path}.points[${i}]`, 'expected [x, y] with two numbers');
+    });
+    if (c.errors.length > before) return undefined;
+    return clean({ points, closed });
+}
+
 function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
     const before = c.errors.length;
     const L = LIMITS.sketch;
@@ -338,32 +386,31 @@ function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
     raw.slice(0, L.strokes).forEach((item, i) => {
         const path = `input.strokes[${i}]`;
         if (!isObj(item)) return c.fail(path, 'expected an object');
-        c.unknownKeys(item, path, ['part', 'd', 'color', 'width']);
+        c.unknownKeys(item, path, ['part', 'd', 'points', 'closed', 'color', 'width']);
         const partName = short(c, item, 'part', path, L.partName, true);
         const part = partName === undefined ? undefined : parts.get(partName);
         if (partName !== undefined) {
             if (part) used.add(partName);
             else if (rawParts.length) c.fail(`${path}.part`, `"${partName}" is not one of the parts: ${[...parts.keys()].join(', ')}`);
         }
-        const d = c.text(item, 'd', path, true);
-        if (d !== undefined) {
-            total += d.length;
-            if (d.length > L.pathLength) c.fail(`${path}.d`, `is longer than ${L.pathLength} characters; split it into several strokes`);
-            else {
-                try {
-                    const subpaths = parsePath(d);
-                    if (!subpaths.length) c.fail(`${path}.d`, 'draws nothing');
-                    else if (part) {
-                        const points = subpaths.flatMap((sub) => samplePath(sub, extent / 100));
-                        checkInside(c, path, points, part, extent);
-                        drawn.set(part.name, [...(drawn.get(part.name) ?? []), ...points]);
-                    }
-                } catch (e) {
-                    c.fail(`${path}.d`, `is not valid SVG path data: ${e instanceof Error ? e.message : String(e)}`);
+        const given = parseLine(c, item, path);
+        if (given) {
+            const field = given.d !== undefined ? `${path}.d` : `${path}.points`;
+            const d = given.d ?? smoothPath(given.points!, given.closed);
+            if (given.d !== undefined) total += d.length;
+            try {
+                const subpaths = parsePath(d);
+                if (!subpaths.length) c.fail(field, 'draws nothing');
+                else if (part) {
+                    const points = subpaths.flatMap((sub) => samplePath(sub, extent / 100));
+                    checkInside(c, field, points, part, extent);
+                    drawn.set(part.name, [...(drawn.get(part.name) ?? []), ...points]);
                 }
+            } catch (e) {
+                c.fail(field, `is not valid SVG path data: ${e instanceof Error ? e.message : String(e)}`);
             }
         }
-        strokes.push(clean({ part: partName, d: d!, color: c.color(item, 'color', path), width: c.number(item, 'width', path, L.width) }));
+        strokes.push(clean({ part: partName, ...given, color: c.color(item, 'color', path), width: c.number(item, 'width', path, L.width) }));
     });
     if (total > L.totalPathLength) c.fail('input.strokes', `has more than ${L.totalPathLength} characters of path data in total`);
     if (raw.length) {
@@ -383,7 +430,7 @@ const area = (p: SketchPart) => `x ${r0(p.x)}â€“${r0(p.x + p.w)}, y ${r0(p.y)}â€
  * A stroke that wanders far from its part's box means the coordinates and the plan disagree, which
  * is how a tail ends up across the face. A little overshoot is fine: hand drawing is not exact.
  */
-function checkInside(c: Checker, path: string, points: Pt[], part: SketchPart, extent: number) {
+function checkInside(c: Checker, field: string, points: Pt[], part: SketchPart, extent: number) {
     const tolerance = 0.2 * Math.max(part.w, part.h) + 0.03 * extent;
     let worst = { d: 0, x: 0, y: 0 };
     for (const p of points) {
@@ -394,7 +441,7 @@ function checkInside(c: Checker, path: string, points: Pt[], part: SketchPart, e
     }
     if (worst.d > tolerance) {
         c.fail(
-            `${path}.d`,
+            field,
             `reaches (${r0(worst.x)}, ${r0(worst.y)}), outside part "${part.name}" (${area(part)}). ` +
                 'Keep each stroke in its part, or fix the part\'s box if the plan was wrong.',
         );

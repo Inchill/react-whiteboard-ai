@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { executeToolCalls, formatToolResult, parseOperation, parsePath, PathSyntaxError, samplePath, sketchToShapes } from '../src';
 import { joinOffsets } from '../src/sketch/join';
+import { smoothPath } from '../src/sketch/smooth';
 import type { Shape } from '../src/types';
 
 type Pen = Extract<Shape, { points: unknown }>;
@@ -57,6 +58,33 @@ describe('samplePath', () => {
         const gaps = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
         for (const g of gaps.slice(0, -1)) expect(g).toBeCloseTo(3, 1);
         expect(pts).toHaveLength(21);
+    });
+});
+
+describe('smoothPath', () => {
+    const near = (pts: { x: number; y: number }[], x: number, y: number) => pts.some((p) => Math.hypot(p.x - x, p.y - y) < 0.6);
+
+    it('draws a smooth line through every point', () => {
+        const input: [number, number][] = [[0, 50], [20, 20], [50, 10], [80, 30], [100, 70]];
+        const d = smoothPath(input);
+        expect(d.startsWith('M0 50 C')).toBe(true);
+        const sub = parsePath(d)[0];
+        expect(sub.closed).toBe(false);
+        const pts = samplePath(sub, 0.5);
+        for (const [x, y] of input) expect(near(pts, x, y)).toBe(true);
+        expect(pts[pts.length - 1]).toEqual({ x: 100, y: 70 });
+    });
+
+    it('closes a loop smoothly, and handles short or repeated input', () => {
+        const sub = parsePath(smoothPath([[0, 0], [10, 0], [10, 10], [0, 10]], true))[0];
+        expect(sub.closed).toBe(true);
+        // A smooth loop through a square's corners bulges out a little, but not much.
+        const xs = samplePath(sub, 0.5).map((p) => p.x);
+        expect(Math.min(...xs)).toBeGreaterThan(-3);
+        expect(Math.max(...xs)).toBeLessThan(13);
+        expect(smoothPath([[0, 0], [10, 10]])).toBe('M0 0 L10 10');
+        expect(smoothPath([[0, 0], [0, 0], [10, 10], [10, 10]])).toBe('M0 0 L10 10');
+        expect(smoothPath([[1, 1]])).toBe('M1 1');
     });
 });
 
@@ -117,6 +145,47 @@ describe('draw_sketch tool', () => {
             'input.strokes[3].d: draws nothing',
             'input.strokes[3].width: expected a number between 1 and 16',
         ]);
+    });
+
+    it('takes points as well as path data, but not both at once', () => {
+        const ok = parseOperation('draw_sketch', {
+            ...plan,
+            strokes: [
+                { part: 'all', points: [[10, 50], [30, 20], [60, 25], [80, 50]] },
+                { part: 'all', points: [[40, 60], [60, 60], [50, 80]], closed: true },
+            ],
+        });
+        expect(ok).toMatchObject({ ok: true });
+        const bad = parseOperation('draw_sketch', {
+            ...plan,
+            strokes: [
+                { part: 'all', d: 'M0 0 L1 1', points: [[0, 0], [1, 1]] },
+                { part: 'all' },
+                { part: 'all', points: [[0, 0], [1, 'x'], [2, 2, 2]] },
+                { part: 'all', points: [[0, 0], [10, 10]], closed: true },
+                { part: 'all', d: 'M0 0 L10 10', closed: true },
+            ],
+        });
+        expect(bad).toMatchObject({
+            ok: false,
+            errors: [
+                'input.strokes[0]: give either d or points, not both',
+                'input.strokes[1]: needs d (SVG path data) or points',
+                'input.strokes[2].points[1]: expected [x, y] with two numbers',
+                'input.strokes[2].points[2]: expected [x, y] with two numbers',
+                'input.strokes[3].points: a closed line needs at least 3 points',
+                'input.strokes[4].closed: only applies to points; close a path with Z',
+            ],
+        });
+    });
+
+    it('checks points against the part box too', () => {
+        const r = parseOperation('draw_sketch', {
+            subject: 'test',
+            parts: [{ name: 'a', x: 0, y: 0, w: 20, h: 20 }, { name: 'b', x: 50, y: 50, w: 50, h: 50 }],
+            strokes: [{ part: 'a', points: [[5, 5], [15, 15], [60, 60]] }, { part: 'b', d: 'M60 60 L90 90' }],
+        });
+        expect(r).toMatchObject({ ok: false, errors: [expect.stringMatching(/^input\.strokes\[0\]\.points: reaches \(60, 60\), outside part "a"/)] });
     });
 
     it('requires a plan: a subject, parts, and a part for every stroke', () => {

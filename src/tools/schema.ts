@@ -127,7 +127,7 @@ const sketchTool: ToolDefinition = {
     description:
         'Draw a line drawing as hand-drawn pen strokes: characters, animals, avatars, plants, objects, doodles, anything with curves. ' +
         'Plan before drawing: say what the picture is and how it is posed (subject), give each part a box (parts), then draw each part ' +
-        'with strokes that stay in its box. Coordinates are in a drawing box (default 100 × 100, x right, y down) that is scaled onto ' +
+        'with strokes that stay in its box. A stroke is either points the line passes through (smooth curves) or SVG path data. Coordinates are in a drawing box (default 100 × 100, x right, y down) that is scaled onto ' +
         'the board, given a natural hand-drawn line and placed next to existing content. Lines only, no fills.',
     inputSchema: {
         type: 'object',
@@ -175,15 +175,28 @@ const sketchTool: ToolDefinition = {
                     type: 'object',
                     properties: {
                         part: { type: 'string', maxLength: K.partName, description: 'The part this stroke draws. It must stay inside that part\'s box.' },
+                        points: {
+                            type: 'array',
+                            minItems: 2,
+                            maxItems: K.pointsPerStroke,
+                            items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+                            description:
+                                'Points the line passes through smoothly, in drawing order, e.g. [[20,60],[30,40],[50,34],[70,40],[80,60]]. ' +
+                                'Best for organic outlines (bodies, heads, tails, leaves, hair): 5–16 points, roughly evenly spaced, more where it bends. ' +
+                                'Give this or d.',
+                        },
+                        closed: { type: 'boolean', description: 'With points: true to join the last point back to the first in a smooth loop.' },
                         d: {
                             type: 'string',
                             maxLength: K.pathLength,
-                            description: 'SVG path data, e.g. "M20 60 C20 30 80 30 80 60". Use C, Q and A for curves. One M per continuous stroke.',
+                            description:
+                                'SVG path data instead of points, e.g. "M20 60 L80 60". Best for circles (A), straight lines and exact shapes. ' +
+                                'One M per continuous stroke.',
                         },
                         color,
                         width: num('Pen width on the board. Default 3; 4–5 for bold outlines, 2 for fine detail.', { minimum: K.width.min, maximum: K.width.max }),
                     },
-                    required: ['part', 'd'],
+                    required: ['part'],
                     additionalProperties: false,
                 },
             },

@@ -12,7 +12,8 @@ export type { ApplyOptions, OperationResult, ToolCall, ToolCallResult } from './
 export { layoutDiagram, DIAGRAM_STYLE } from './layout/diagram';
 export type { DiagramInput, DiagramNode, DiagramEdge, DiagramOptions, DiagramResult } from './layout/diagram';
 
-export { sketchToShapes, humanize, SKETCH_DEFAULTS } from './sketch/sketch';
+export { sketchToShapes, humanize, strokePath, SKETCH_DEFAULTS } from './sketch/sketch';
+export { smoothPath } from './sketch/smooth';
 export type { SketchInput, SketchPart, SketchStroke, SketchOptions } from './sketch/sketch';
 export { parsePath, samplePath, PathSyntaxError } from './sketch/path';
 export { joinParts, JOIN } from './sketch/join';

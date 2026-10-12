@@ -1,5 +1,5 @@
 import { parsePath, samplePath, type Pt } from './path';
-import type { SketchInput, SketchPart } from './sketch';
+import { strokePath, type SketchInput, type SketchPart } from './sketch';
 
 /**
  * Joining attached parts. A part drawn `on` another (a head on the body, a tail on the body) should
@@ -27,7 +27,7 @@ export function sampleParts(input: SketchInput): Map<string, Pt[]> {
     for (const stroke of input.strokes) {
         if (stroke.part === undefined) continue;
         const points = out.get(stroke.part) ?? [];
-        for (const sub of parsePath(stroke.d)) points.push(...samplePath(sub, step));
+        for (const sub of parsePath(strokePath(stroke))) points.push(...samplePath(sub, step));
         out.set(stroke.part, points);
     }
     return out;

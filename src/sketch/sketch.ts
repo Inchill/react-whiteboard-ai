@@ -1,6 +1,7 @@
 import { createId as defaultCreateId } from '../geometry';
 import { INK, type Shape } from '../types';
 import { joinOffsets } from './join';
+import { smoothPath } from './smooth';
 import { parsePath, samplePath, type Pt } from './path';
 
 /**
@@ -11,8 +12,12 @@ import { parsePath, samplePath, type Pt } from './path';
  */
 
 export type SketchStroke = {
-    /** SVG path data in the sketch's own coordinates, e.g. "M10 50 C 20 10, 80 10, 90 50". */
-    d: string;
+    /** SVG path data in the sketch's own coordinates, e.g. "M10 50 C 20 10, 80 10, 90 50". Give this or `points`. */
+    d?: string;
+    /** Points the line passes through smoothly, in drawing order. Give this or `d`. */
+    points?: [number, number][];
+    /** With `points`: join the last point back to the first in a smooth loop. */
+    closed?: boolean;
     /** Name of the part this stroke draws, from `parts`. */
     part?: string;
     /** "ink" (default) or a hex color. */
@@ -118,6 +123,9 @@ export function humanize(points: Pt[], closed: boolean, rand: () => number): [nu
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
+/** A stroke's line as SVG path data, whether it was given as `d` or as `points`. */
+export const strokePath = (stroke: SketchStroke): string => stroke.d ?? smoothPath(stroke.points ?? [], stroke.closed);
+
 /**
  * Turn a sketch into pen strokes on the board. Throws PathSyntaxError for invalid path data.
  * Parts drawn `on` another are moved to touch it when the gap is small (see `joinParts`).
@@ -129,12 +137,12 @@ export function sketchToShapes(input: SketchInput, options: SketchOptions = {}):
     const k = (input.size ?? SKETCH_DEFAULTS.size) / Math.max(boxW, boxH);
     const ox = input.x ?? options.origin?.x ?? 0;
     const oy = input.y ?? options.origin?.y ?? 0;
-    const rand = random(options.seed ?? hash(input.strokes.map((s) => s.d).join('|')));
+    const rand = random(options.seed ?? hash(input.strokes.map(strokePath).join('|')));
     const { offsets } = joinOffsets(input);
 
     const shapes: Shape[] = [];
     for (const stroke of input.strokes) {
-        for (const sub of parsePath(stroke.d)) {
+        for (const sub of parsePath(strokePath(stroke))) {
             // Sample in board units so the point spacing does not depend on the sketch's scale.
             const off = (stroke.part !== undefined && offsets.get(stroke.part)) || { x: 0, y: 0 };
             const scaled = { ...sub, segments: sub.segments.map((seg) => scaleSegment(seg, k, ox + off.x * k, oy + off.y * k)) };
