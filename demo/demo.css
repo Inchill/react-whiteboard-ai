@@ -546,14 +546,22 @@ button:disabled {
     background: var(--surface-sunk);
 }
 
-.op-pending .op-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+/* Spinner in its own column, centered on the first line; title and detail keep their line height. */
+.op-pending {
+    display: grid;
+    grid-template-columns: 12px 1fr;
+    column-gap: 10px;
+    row-gap: 2px;
+    align-items: start;
 }
 
+.op-pending .spinner {
+    margin-top: calc((1.55em - 12px) / 2);
+}
+
+.op-pending .op-title,
 .op-pending .op-detail {
-    padding-left: 20px;
+    grid-column: 2;
 }
 
 .say-live::after {
