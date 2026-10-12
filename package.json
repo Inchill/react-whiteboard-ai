@@ -1,0 +1,82 @@
+{
+  "name": "@inchill/react-whiteboard-ai",
+  "version": "0.1.0",
+  "description": "Let LLMs read and operate @inchill/react-whiteboard: board context, tool definitions, validation and an undo-friendly executor.",
+  "keywords": [
+    "react",
+    "whiteboard",
+    "ai",
+    "llm",
+    "tool-calling",
+    "canvas"
+  ],
+  "license": "MIT",
+  "author": "Inchill",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Inchill/react-whiteboard-ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Inchill/react-whiteboard-ai/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/react-whiteboard-ai.cjs",
+  "module": "./dist/react-whiteboard-ai.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/react-whiteboard-ai.js",
+      "require": "./dist/react-whiteboard-ai.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.lib.json",
+    "lint": "eslint .",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "@inchill/react-whiteboard": ">=1.0.0",
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@inchill/react-whiteboard": "^1.0.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.19.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.13.0",
+    "jsdom": "^26.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "~5.9",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^7.3.7",
+    "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@10.34.6",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

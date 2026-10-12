@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+coverage/
+*.tsbuildinfo
+
+# misc
+.DS_Store
+.env*.local
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# pnpm store (if created inside the project)
+.pnpm-store/
