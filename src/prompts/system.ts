@@ -40,7 +40,7 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         '- Lay out the big masses first. A whole figure fills most of the box. For a body with a head, give each its own box: the head ' +
             'is about a third of the figure\'s height for a cute style, and overlaps the body where they join. A face alone fills the box.',
         '- Attached parts (ears, arms, legs, tail, beak, handle) overlap the edge of the part they grow from, on the correct side for the ' +
-            'pose, and name it in `on`. Their strokes start on that part\'s outline; the tool rejects one that floats free. Details ' +
+            'pose, and name it in `on`. Their strokes start on that part\'s outline. A small gap is closed for you by moving the attached part; one placed far away is rejected. Details ' +
             '(eyes, nose, mouth, patterns) sit well inside their part.',
         '- Poses: a sitting animal has a pear-shaped body, wider at the bottom, with the head on top; its front legs come straight down ' +
             'from the chest to the ground with small oval paws; a tail curled in front starts at the back of the body, runs along the ' +

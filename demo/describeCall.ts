@@ -57,7 +57,10 @@ export function describeCall(call: ToolCall, result: ToolCallResult): { kind: Ca
             return {
                 kind,
                 title: kind === 'error' ? '想画一幅线稿，但没通过检查' : '手绘了一幅线稿',
-                detail: kind === 'error' ? `规划了 ${parts} 个部分、${strokes} 笔` : `规划了 ${parts} 个部分，画了 ${strokes} 笔`,
+                detail:
+                    kind === 'error'
+                        ? `规划了 ${parts} 个部分、${strokes} 笔`
+                        : `规划了 ${parts} 个部分，画了 ${strokes} 笔${result.notes?.length ? `，自动接上 ${result.notes.length} 处断开的部分` : ''}`,
             };
         }
         case 'delete_shapes': {
