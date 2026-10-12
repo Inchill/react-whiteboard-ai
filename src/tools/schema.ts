@@ -120,8 +120,50 @@ const diagramTool: ToolDefinition = {
     },
 };
 
+const K = LIMITS.sketch;
+
+const sketchTool: ToolDefinition = {
+    name: 'draw_sketch',
+    description:
+        'Draw a line drawing as hand-drawn pen strokes: characters, animals, avatars, plants, objects, doodles, anything with curves. ' +
+        'Write SVG path data in a coordinate box (default 100 × 100, x right, y down); it is scaled onto the board, given a natural ' +
+        'hand-drawn line and placed next to existing content. Lines only, no fills.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            strokes: {
+                type: 'array',
+                minItems: 1,
+                maxItems: K.strokes,
+                items: {
+                    type: 'object',
+                    properties: {
+                        d: {
+                            type: 'string',
+                            maxLength: K.pathLength,
+                            description: 'SVG path data, e.g. "M20 60 C20 30 80 30 80 60". Use C, Q and A for curves. One M per continuous stroke.',
+                        },
+                        color,
+                        width: num('Pen width on the board. Default 3; 4–5 for bold outlines, 2 for fine detail.', { minimum: K.width.min, maximum: K.width.max }),
+                    },
+                    required: ['d'],
+                    additionalProperties: false,
+                },
+            },
+            width: num('Width of the coordinate box. Default 100.', { minimum: 1 }),
+            height: num('Height of the coordinate box. Default 100.', { minimum: 1 }),
+            size: num('Longest side of the drawing on the board. Default 240.', { minimum: K.size.min, maximum: K.size.max }),
+            x: num('Optional left edge on the board. Omit to place it beside existing content.'),
+            y: num('Optional top edge on the board.'),
+        },
+        required: ['strokes'],
+        additionalProperties: false,
+    },
+};
+
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
     diagramTool,
+    sketchTool,
     {
         name: 'add_shapes',
         description:

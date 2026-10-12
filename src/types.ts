@@ -1,5 +1,6 @@
 import type { FillStyle, Shape, StrokeStyle } from '@inchill/react-whiteboard';
 import type { DiagramInput } from './layout/diagram';
+import type { SketchInput } from './sketch/sketch';
 
 export type { Shape, FillStyle, StrokeStyle };
 
@@ -73,6 +74,7 @@ export type Operation =
     | { op: 'add_shapes'; shapes: ShapeInput[] }
     | { op: 'update_shapes'; updates: ShapePatch[] }
     | { op: 'delete_shapes'; ids: string[] }
-    | { op: 'add_diagram'; diagram: DiagramInput };
+    | { op: 'add_diagram'; diagram: DiagramInput }
+    | { op: 'draw_sketch'; sketch: SketchInput };
 
 export type OperationName = Operation['op'];

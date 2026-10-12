@@ -1,5 +1,6 @@
 import { createId as defaultCreateId, measureText, shapeBox, translateShape, unionBox } from '../geometry';
 import { layoutDiagram } from '../layout/diagram';
+import { sketchToShapes } from '../sketch/sketch';
 import { parseOperation } from '../tools/validate';
 import { INK, type Operation, type Shape, type ShapeInput, type ShapePatch } from '../types';
 
@@ -97,6 +98,12 @@ export function patchShape(shape: Shape, patch: ShapePatch): Shape | string {
     return next;
 }
 
+/** Where new content goes when the model does not say: to the right of everything on the board. */
+function besideContent(shapes: Shape[]) {
+    const bounds = unionBox(shapes.map(shapeBox));
+    return bounds ? { x: bounds.x + bounds.w + 80, y: bounds.y } : { x: 0, y: 0 };
+}
+
 function applyOne(shapes: Shape[], op: Operation, createId: () => string): { shapes: Shape[]; result: OperationResult } {
     const result: OperationResult = { op: op.op, created: [], updated: [], deleted: [], errors: [] };
     switch (op.op) {
@@ -124,10 +131,14 @@ function applyOne(shapes: Shape[], op: Operation, createId: () => string): { sha
             });
             return { shapes: result.updated.length ? next : shapes, result };
         }
+        case 'draw_sketch': {
+            const drawn = sketchToShapes(op.sketch, { createId, origin: besideContent(shapes) });
+            result.created = drawn.map((s) => s.id);
+            return { shapes: [...shapes, ...drawn], result };
+        }
         case 'add_diagram': {
             // Unless told where, put the diagram to the right of what is already on the board.
-            const bounds = unionBox(shapes.map(shapeBox));
-            const origin = bounds ? { x: bounds.x + bounds.w + 80, y: bounds.y } : { x: 0, y: 0 };
+            const origin = besideContent(shapes);
             const drawn = layoutDiagram(op.diagram, { createId, origin });
             result.created = drawn.shapes.map((s) => s.id);
             result.nodes = drawn.nodes;

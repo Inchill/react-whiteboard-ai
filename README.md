@@ -87,6 +87,7 @@ For OpenAI-compatible APIs use `toOpenAITools()` and parse each call's `function
 | Tool | Does |
 | --- | --- |
 | `add_diagram` | Boxes joined by arrows (flowcharts, architecture, org charts, trees, pipelines). The model gives nodes, layers and edges; layout, sizes, colors and arrow routing are automatic |
+| `draw_sketch` | Line drawings with curves (characters, animals, avatars, objects). The model writes SVG paths; they become hand-drawn pressure pen strokes |
 | `add_shapes` | Add rectangles, ellipses, triangles, lines, arrows and text |
 | `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle or edit text by id |
 | `delete_shapes` | Delete by id |
@@ -101,6 +102,7 @@ For OpenAI-compatible APIs use `toOpenAITools()` and parse each call's `function
 | `executeToolCalls(shapes, calls)` | Pure: validate + apply, returns new shapes and per-call results |
 | `applyOperations(shapes, ops)` | Pure: apply already-validated operations |
 | `layoutDiagram(input)` | Pure: lay out a node-and-arrow diagram as board shapes, without a model |
+| `sketchToShapes(input)` | Pure: SVG paths → hand-drawn pen strokes, without a model |
 | `parseOperation(name, input)` | Validate one tool call |
 | `formatToolResult(result)` | Short text to return to the model as the tool result |
 | `TOOL_DEFINITIONS`, `toAnthropicTools()`, `toOpenAITools()` | Tool schemas |

@@ -12,6 +12,10 @@ export type { ApplyOptions, OperationResult, ToolCall, ToolCallResult } from './
 export { layoutDiagram, DIAGRAM_STYLE } from './layout/diagram';
 export type { DiagramInput, DiagramNode, DiagramEdge, DiagramOptions, DiagramResult } from './layout/diagram';
 
+export { sketchToShapes, humanize, SKETCH_DEFAULTS } from './sketch/sketch';
+export type { SketchInput, SketchStroke, SketchOptions } from './sketch/sketch';
+export { parsePath, samplePath, PathSyntaxError } from './sketch/path';
+
 export { createWhiteboardAgent } from './agent';
 export type { WhiteboardAgent } from './agent';
 export { useWhiteboardAI } from './react/useWhiteboardAI';

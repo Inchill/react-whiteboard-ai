@@ -1,4 +1,6 @@
 import type { DiagramEdge, DiagramInput, DiagramNode } from '../layout/diagram';
+import { parsePath } from '../sketch/path';
+import type { SketchInput, SketchStroke } from '../sketch/sketch';
 import type { Operation, OperationName, ShapeInput, ShapePatch } from '../types';
 
 /** Limits that keep a confused model from producing unusable or huge documents. */
@@ -9,6 +11,7 @@ export const LIMITS = {
     textLength: 2000,
     itemsPerOperation: 200,
     diagram: { nodes: 60, edges: 120, labelLength: 80, idLength: 40 },
+    sketch: { strokes: 120, pathLength: 4000, totalPathLength: 40000, width: { min: 1, max: 16 }, size: { min: 40, max: 2000 } },
 } as const;
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; errors: string[] };
@@ -18,7 +21,7 @@ const STROKE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 const FILLS = ['none', 'semi', 'solid'] as const;
 const BOX_TYPES = ['rect', 'ellipse', 'triangle'] as const;
 const LINEAR_TYPES = ['line', 'arrow'] as const;
-export const OPERATION_NAMES: OperationName[] = ['add_shapes', 'update_shapes', 'delete_shapes', 'add_diagram'];
+export const OPERATION_NAMES: OperationName[] = ['add_shapes', 'update_shapes', 'delete_shapes', 'add_diagram', 'draw_sketch'];
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -276,6 +279,42 @@ function parseDiagram(c: Checker, input: Obj): DiagramInput | undefined {
     return clean({ direction, nodes, edges, x, y });
 }
 
+function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
+    const before = c.errors.length;
+    const L = LIMITS.sketch;
+    c.unknownKeys(input, 'input', ['width', 'height', 'strokes', 'size', 'x', 'y']);
+    const width = c.number(input, 'width', 'input', { min: 1, max: 10000 });
+    const height = c.number(input, 'height', 'input', { min: 1, max: 10000 });
+    const size = c.number(input, 'size', 'input', L.size);
+    const x = c.number(input, 'x', 'input');
+    const y = c.number(input, 'y', 'input');
+    const raw = c.array(input, 'strokes', 'input') ?? [];
+    if (raw.length > L.strokes) c.fail('input.strokes', `has more than ${L.strokes} strokes`);
+    let total = 0;
+    const strokes: SketchStroke[] = [];
+    raw.slice(0, L.strokes).forEach((item, i) => {
+        const path = `input.strokes[${i}]`;
+        if (!isObj(item)) return c.fail(path, 'expected an object');
+        c.unknownKeys(item, path, ['d', 'color', 'width']);
+        const d = c.text(item, 'd', path, true);
+        if (d !== undefined) {
+            total += d.length;
+            if (d.length > L.pathLength) c.fail(`${path}.d`, `is longer than ${L.pathLength} characters; split it into several strokes`);
+            else {
+                try {
+                    if (!parsePath(d).length) c.fail(`${path}.d`, 'draws nothing');
+                } catch (e) {
+                    c.fail(`${path}.d`, `is not valid SVG path data: ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
+        }
+        strokes.push(clean({ d: d!, color: c.color(item, 'color', path), width: c.number(item, 'width', path, L.width) }));
+    });
+    if (total > L.totalPathLength) c.fail('input.strokes', `has more than ${L.totalPathLength} characters of path data in total`);
+    if (c.errors.length > before) return undefined;
+    return clean({ width, height, strokes, size, x, y });
+}
+
 /**
  * Validate one tool call from a model. `name` is the tool name, `input` its parsed JSON arguments.
  * Returns every problem at once so they can go back to the model in a single tool result.
@@ -313,6 +352,11 @@ export function parseOperation(name: string, input: unknown): ParseResult<Operat
         case 'add_diagram': {
             const diagram = parseDiagram(c, input);
             if (diagram) op = { op: name, diagram };
+            break;
+        }
+        case 'draw_sketch': {
+            const sketch = parseSketch(c, input);
+            if (sketch) op = { op: name, sketch };
             break;
         }
     }

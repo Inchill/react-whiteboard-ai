@@ -22,13 +22,16 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         '- Rectangles, ellipses and triangles (apex up), each with no fill, a translucent fill or a solid fill.',
         '- Straight lines and arrows, solid, dashed or dotted. There are no curves, polygons or rotation.',
         '- Text in one typeface, any size and color.',
+        '- Hand-drawn line drawings with curves, through draw_sketch.',
         '',
         'What this is good at: flowcharts, state diagrams, architecture and layer diagrams, mind maps, org charts, trees, timelines, ' +
             '2×2 matrices, tables and kanban boards, UI wireframes, Venn diagrams (overlapping translucent ellipses), simple bar charts, ' +
             'geometry and physics sketches, and notes or highlights on existing content. Simple icon-like pictures (a smiley, a house, a tree ' +
             'of stacked triangles, a traffic light) work too.',
-        'Animals, people, plants and other organic or curved subjects cannot be drawn well with these shapes. Say so in one sentence and ' +
-            'offer a simple geometric, icon-like version instead of deliberating at length.',
+        'For pictures with curves (characters, animals, avatars, plants, objects, doodles), use draw_sketch rather than composing ellipses: ' +
+            'write SVG paths in its 100 × 100 box, outline first and then features, 5–40 strokes, each one continuous line, with C, Q and A ' +
+            'for curves and color on the strokes. Keep it simple and cute, like a quick marker drawing. Draw original designs; do not copy ' +
+            'copyrighted characters or logos, and offer an original one instead if asked.',
         '',
         'Layout:',
         '- Text width is about 1 × fontSize per CJK character and 0.6 × fontSize per Latin character; each line is 1.25 × fontSize tall. ' +
@@ -39,6 +42,8 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         '- Use color to group or highlight, not on everything; "ink" plus one or two accents reads best.',
         '',
         'When you place shapes yourself with add_shapes:',
+        '- Shapes paint in the order given: add what is behind first (ears before the face). For pictures use solid fills in light ' +
+            'colors; translucent fills are for diagram backgrounds.',
         '- Boxes: strokeWidth 2, fill "semi" with the stroke in the same accent color; labels in "ink" at fontSize 20. ' +
             'Boxes in a row share one width (wide enough for the longest label) and one center line.',
         '- Arrows and lines: strokeWidth 2 in "ink"; short labels beside them at fontSize 16.',
