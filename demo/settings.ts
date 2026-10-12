@@ -69,3 +69,22 @@ export const settingsHeaders = (s: AISettings): Record<string, string> => ({
     'x-ai-key': s.key,
     ...(s.model ? { 'x-ai-model': s.model } : {}),
 });
+
+const THINKING_KEY = 'react-whiteboard-ai-demo:thinking';
+
+/** Whether the model should reason before answering. Off by default: drawing rarely needs it and it is much slower. */
+export function loadThinking(): boolean {
+    try {
+        return localStorage.getItem(THINKING_KEY) === 'on';
+    } catch {
+        return false;
+    }
+}
+
+export function saveThinking(on: boolean) {
+    try {
+        localStorage.setItem(THINKING_KEY, on ? 'on' : 'off');
+    } catch {
+        /* storage unavailable: the choice lasts for this page only */
+    }
+}

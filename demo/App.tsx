@@ -5,7 +5,18 @@ import { describeCall } from './describeCall';
 import { EXAMPLES } from './examples';
 import { SettingsPanel } from './SettingsPanel';
 import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
-import { clearSettings, loadSettings, modelInfo, PROVIDERS, saveSettings, settingsHeaders, type AISettings, type Provider } from './settings';
+import {
+    clearSettings,
+    loadSettings,
+    loadThinking,
+    modelInfo,
+    PROVIDERS,
+    saveSettings,
+    saveThinking,
+    settingsHeaders,
+    type AISettings,
+    type Provider,
+} from './settings';
 
 type LogEntry =
     | { kind: 'prompt'; text: string; example: boolean }
@@ -35,6 +46,7 @@ export function App() {
     const [serverModel, setServerModel] = useState<{ provider: Provider; model: string } | null>(null);
     const [settings, setSettings] = useState<AISettings | null>(loadSettings);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [deepThinking, setDeepThinking] = useState(loadThinking);
     const logEnd = useRef<HTMLDivElement>(null);
     const composer = useRef<HTMLTextAreaElement>(null);
     // Bumped after each AI turn; the effect below fits the view once React has rendered the new shapes.
@@ -115,7 +127,11 @@ export function App() {
                 const res = await fetch('/api/ai', {
                     method: 'POST',
                     signal: stop.signal,
-                    headers: { 'content-type': 'application/json', ...(settings ? settingsHeaders(settings) : {}) },
+                    headers: {
+                        'content-type': 'application/json',
+                        'x-ai-thinking': deepThinking ? 'on' : 'off',
+                        ...(settings ? settingsHeaders(settings) : {}),
+                    },
                     body: JSON.stringify({ messages }),
                 });
                 if (!res.ok || !res.body) {
@@ -158,6 +174,9 @@ export function App() {
                 }
                 // Everything the model wrote this round lands on the board at once: one undo step.
                 const results = run(calls);
+                // When every call worked the drawing is done; going back to the model would only cost
+                // another full round trip for a closing sentence. Errors go back so it can fix them.
+                if (results.every((r) => r.ok)) break;
                 messages.push({
                     role: 'user',
                     content: results.map((r) => ({ type: 'tool_result', tool_use_id: r.id, content: formatToolResult(r), is_error: !r.ok })),
@@ -308,7 +327,23 @@ export function App() {
                             </button>
                         )}
                     </div>
-                    <p className="composer-hint">AI 每一轮的修改算一步，按 {UNDO_KEYS} 可以整体撤回。</p>
+                    <div className="composer-foot">
+                        <p className="composer-hint">AI 每轮修改算一步，{UNDO_KEYS} 整体撤回</p>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={deepThinking}
+                            className="switch"
+                            title="让模型先推理再动手。更适合复杂指令，但会慢很多。"
+                            onClick={() => {
+                                saveThinking(!deepThinking);
+                                setDeepThinking(!deepThinking);
+                            }}
+                        >
+                            <span className="switch-track" aria-hidden />
+                            深度思考
+                        </button>
+                    </div>
                 </form>
             </aside>
         </div>

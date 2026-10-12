@@ -46,6 +46,15 @@ class EventTally {
     }
 }
 
+/**
+ * DeepSeek's reasoning models think by default, so "off" has to be said explicitly; Claude only
+ * thinks when asked. DeepSeek ignores budget_tokens; Claude needs it below max_tokens.
+ */
+function thinkingParam(provider: ProviderName, on: boolean, maxTokens: number) {
+    if (on) return { type: 'enabled', budget_tokens: Math.min(8000, Math.floor(maxTokens / 2)) };
+    return provider === 'deepseek' ? { type: 'disabled' } : null;
+}
+
 export type ProviderName = 'anthropic' | 'deepseek';
 type Provider = { name: ProviderName; url: string; key: string; model: string };
 
@@ -112,19 +121,29 @@ export function aiProxy(env: Record<string, string>): Plugin {
                 res.on('close', () => abort.abort());
                 try {
                     const { messages } = JSON.parse(await readBody(req));
-                    const upstream = await fetch(provider.url, {
-                        method: 'POST',
-                        signal: abort.signal,
-                        headers: { 'x-api-key': provider.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-                        body: JSON.stringify({
-                            model: provider.model,
-                            max_tokens: maxTokens,
-                            stream: true,
-                            system: buildSystemPrompt(),
-                            tools: toAnthropicTools(),
-                            messages,
-                        }),
-                    });
+                    const thinkingOn = (header(req, 'x-ai-thinking') ?? env.AI_THINKING) === 'on';
+                    const thinking = thinkingParam(provider.name, thinkingOn, maxTokens);
+                    const call = (withThinking: boolean) =>
+                        fetch(provider.url, {
+                            method: 'POST',
+                            signal: abort.signal,
+                            headers: { 'x-api-key': provider.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                model: provider.model,
+                                max_tokens: maxTokens,
+                                stream: true,
+                                system: buildSystemPrompt(),
+                                tools: toAnthropicTools(),
+                                messages,
+                                ...(withThinking && thinking ? { thinking } : {}),
+                            }),
+                        });
+                    let upstream = await call(true);
+                    // A model that does not accept the thinking setting still gets a normal request.
+                    if (upstream.status === 400 && thinking) {
+                        log(`${provider.name} ${provider.model}: rejected the thinking setting, retrying without it`);
+                        upstream = await call(false);
+                    }
                     const type = upstream.headers.get('content-type') ?? '';
                     if (!upstream.ok || !upstream.body || !type.includes('text/event-stream')) {
                         log(`${provider.name} ${provider.model}: HTTP ${upstream.status}, ${type || 'no content type'} (not streamed)`);
