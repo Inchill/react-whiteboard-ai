@@ -74,15 +74,33 @@ export function aiProxy(env: Record<string, string>): Plugin {
                 if (fromPage === 'invalid') return send(res, 400, { error: 'Unknown provider.' });
                 const provider = fromPage ?? fallback;
                 if (!provider) return send(res, 501, { error: 'No API key. Add one in the settings panel, or in .env.local.' });
+                // Stop the upstream request when the page goes away or presses Stop.
+                const abort = new AbortController();
+                res.on('close', () => abort.abort());
                 try {
                     const { messages } = JSON.parse(await readBody(req));
                     const upstream = await fetch(provider.url, {
                         method: 'POST',
+                        signal: abort.signal,
                         headers: { 'x-api-key': provider.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-                        body: JSON.stringify({ model: provider.model, max_tokens: 4096, system: buildSystemPrompt(), tools: toAnthropicTools(), messages }),
+                        body: JSON.stringify({
+                            model: provider.model,
+                            max_tokens: 4096,
+                            stream: true,
+                            system: buildSystemPrompt(),
+                            tools: toAnthropicTools(),
+                            messages,
+                        }),
                     });
-                    send(res, upstream.status, await upstream.text());
+                    if (!upstream.ok || !upstream.body) return send(res, upstream.status, await upstream.text());
+                    // Relay the server-sent events as they arrive.
+                    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+                    const reader = upstream.body.getReader();
+                    for (let r = await reader.read(); !r.done; r = await reader.read()) res.write(r.value);
+                    res.end();
                 } catch (e) {
+                    if (abort.signal.aborted) return res.end();
+                    if (res.headersSent) return res.end();
                     send(res, 502, { error: e instanceof Error ? e.message : String(e) });
                 }
             });

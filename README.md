@@ -22,7 +22,7 @@ pnpm dev
 
 The demo page has canned examples that run without an API key: each one is a model turn written exactly as a model would return it, so you can see the tool calls, the validation errors and the single-step undo.
 
-To talk to a real model, open **Model settings** in the panel, pick Claude or DeepSeek and paste an API key. It is kept in this tab only (or in the browser if you tick *Remember*) and sent to the local dev server, which forwards the request; it is never logged or stored there. You can also put `ANTHROPIC_API_KEY` or `DEEPSEEK_API_KEY` in `.env.local` instead (see `.env.example`); a key set on the page wins.
+To talk to a real model, open **Model settings** in the panel, pick Claude or DeepSeek and paste an API key. It is kept in this tab only (or in the browser if you tick *Remember*) and sent to the local dev server, which forwards the request; it is never logged or stored there. Replies stream in: you see the model's words as it writes them and how many shapes it has written so far; the shapes land on the board together when the round is complete, as one undo step. You can also put `ANTHROPIC_API_KEY` or `DEEPSEEK_API_KEY` in `.env.local` instead (see `.env.example`); a key set on the page wins.
 
 ## Install
 

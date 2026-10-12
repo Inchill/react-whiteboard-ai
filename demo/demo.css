@@ -90,6 +90,19 @@ button:disabled {
     font-weight: 600;
 }
 
+.button-stop {
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    padding: 8px 16px;
+    background: var(--surface);
+    font-weight: 600;
+}
+
+.button-stop:hover {
+    border-color: var(--red);
+    color: var(--red);
+}
+
 .button-quiet {
     border: 0;
     padding: 4px 0;
@@ -416,6 +429,29 @@ button:disabled {
     background: color-mix(in srgb, var(--mark) 7%, var(--surface));
 }
 
+/* Still being written: a dashed marker until the parameters are complete. */
+.op-pending {
+    --mark: var(--muted);
+    border-left-style: dashed;
+}
+
+.op-pending .op-title span,
+.say-live::after {
+    animation: blink 1s steps(2, start) infinite;
+}
+
+.say-live::after {
+    content: '▍';
+    margin-left: 1px;
+    color: var(--blue);
+}
+
+@keyframes blink {
+    to {
+        visibility: hidden;
+    }
+}
+
 .op-add {
     --mark: var(--green);
 }
@@ -502,7 +538,9 @@ button:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .log-busy span {
+    .log-busy span,
+    .op-pending .op-title span,
+    .say-live::after {
         animation: none;
     }
 }

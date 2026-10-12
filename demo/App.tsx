@@ -4,6 +4,7 @@ import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult }
 import { describeCall } from './describeCall';
 import { EXAMPLES, type Example } from './examples';
 import { SettingsPanel } from './SettingsPanel';
+import { countSoFar, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
 import { clearSettings, loadSettings, modelInfo, PROVIDERS, saveSettings, settingsHeaders, type AISettings, type Provider } from './settings';
 
 type LogEntry =
@@ -12,7 +13,6 @@ type LogEntry =
     | { kind: 'calls'; calls: ToolCall[]; results: ToolCallResult[] }
     | { kind: 'error'; text: string; auth: boolean };
 
-type ContentBlock = { type: 'text'; text: string } | { type: 'tool_use'; id: string; name: string; input: unknown };
 type Message = { role: 'user' | 'assistant'; content: unknown };
 
 /** How many model ↔ tool round trips one prompt may take. */
@@ -27,6 +27,9 @@ export function App() {
     const [log, setLog] = useState<LogEntry[]>([]);
     const [input, setInput] = useState('');
     const [busy, setBusy] = useState(false);
+    /** The model's reply while it is still streaming in. */
+    const [live, setLive] = useState<LiveMessage | null>(null);
+    const stopRef = useRef<AbortController | null>(null);
     /** Provider configured in .env.local, if any. */
     const [serverModel, setServerModel] = useState<{ provider: Provider; model: string } | null>(null);
     const [settings, setSettings] = useState<AISettings | null>(loadSettings);
@@ -48,7 +51,7 @@ export function App() {
     // any non-function return value of an effect as a mistake.
     useEffect(() => {
         logEnd.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-    }, [log, busy]);
+    }, [log, busy, live]);
 
     useEffect(() => {
         if (fitRequest) board.current?.zoomToFit();
@@ -79,26 +82,39 @@ export function App() {
         setInput('');
         setBusy(true);
         push({ kind: 'prompt', text: prompt, canned: false });
+        const stop = new AbortController();
+        stopRef.current = stop;
         const messages: Message[] = [{ role: 'user', content: `Board:\n${JSON.stringify(ai.describe())}\n\n${prompt}` }];
+        // Stream updates arrive many times a second; render at most once per frame.
+        let frame = 0;
+        const show = (m: LiveMessage) => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => setLive(m));
+        };
         try {
             for (let round = 0; round < MAX_ROUNDS; round++) {
                 const res = await fetch('/api/ai', {
                     method: 'POST',
+                    signal: stop.signal,
                     headers: { 'content-type': 'application/json', ...(settings ? settingsHeaders(settings) : {}) },
                     body: JSON.stringify({ messages }),
                 });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
+                if (!res.ok || !res.body) {
+                    const data = await res.json().catch(() => ({}));
                     const detail = data.error?.message ?? data.error ?? `HTTP ${res.status}`;
                     const auth = res.status === 401 || res.status === 403;
                     push({ kind: 'error', text: auth ? `模型拒绝了这个 API key（${res.status}）：${detail}` : `请求失败：${detail}`, auth });
                     return;
                 }
-                const content = data.content as ContentBlock[];
-                messages.push({ role: 'assistant', content });
-                for (const b of content) if (b.type === 'text' && b.text.trim()) push({ kind: 'say', text: b.text });
-                const calls = content.filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, input: b.input }));
+                const message = await readMessageStream(res.body, show);
+                cancelAnimationFrame(frame);
+                setLive(null);
+
+                messages.push({ role: 'assistant', content: toAssistantContent(message) });
+                for (const b of message.blocks) if (b.type === 'text' && b.text.trim()) push({ kind: 'say', text: b.text });
+                const calls = message.blocks.flatMap((b) => (b.type === 'tool_use' ? [{ id: b.id, name: b.name, input: b.input }] : []));
                 if (!calls.length) break;
+                // Everything the model wrote this round lands on the board at once: one undo step.
                 const results = run(calls);
                 messages.push({
                     role: 'user',
@@ -106,8 +122,12 @@ export function App() {
                 });
             }
         } catch (err) {
-            push({ kind: 'error', text: `连不上本地开发服务器：${err instanceof Error ? err.message : String(err)}`, auth: false });
+            if (stop.signal.aborted) push({ kind: 'say', text: '已停止。这一轮还没写完的修改没有画到白板上。' });
+            else push({ kind: 'error', text: `出错了：${err instanceof Error ? err.message : String(err)}`, auth: false });
         } finally {
+            cancelAnimationFrame(frame);
+            setLive(null);
+            stopRef.current = null;
             setBusy(false);
             composer.current?.focus();
         }
@@ -187,9 +207,10 @@ export function App() {
                     {log.map((entry, i) => (
                         <LogItem key={i} entry={entry} index={i} onOpenSettings={() => setSettingsOpen(true)} />
                     ))}
-                    {busy && (
+                    {live && <LiveReply message={live} />}
+                    {busy && !live?.blocks.length && (
                         <p className="log-busy" role="status">
-                            正在画<span aria-hidden>…</span>
+                            正在想<span aria-hidden>…</span>
                         </p>
                     )}
                     <div ref={logEnd} />
@@ -215,8 +236,12 @@ export function App() {
                             disabled={!canAsk || busy}
                             aria-label="给 AI 的指令"
                         />
-                        {canAsk ? (
-                            <button type="submit" className="button-primary" disabled={busy || !input.trim()}>
+                        {busy ? (
+                            <button type="button" className="button-stop" onClick={() => stopRef.current?.abort()}>
+                                停止
+                            </button>
+                        ) : canAsk ? (
+                            <button type="submit" className="button-primary" disabled={!input.trim()}>
                                 发送
                             </button>
                         ) : (
@@ -287,4 +312,44 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
                 </ul>
             );
     }
+}
+
+const PENDING: Record<string, [string, string]> = {
+    add_shapes: ['正在添加图形', '个'],
+    update_shapes: ['正在修改图形', '处'],
+    delete_shapes: ['正在删除图形', '个'],
+};
+
+/** The reply as it streams in: text grows word by word, tool calls show how far along they are. */
+function LiveReply({ message }: { message: LiveMessage }) {
+    return (
+        <>
+            {message.blocks.map((b, i) => {
+                if (!b) return null;
+                if (b.type === 'text') {
+                    // The caret only follows the text that is still being written.
+                    const writing = i === message.blocks.length - 1;
+                    return b.text ? (
+                        <p key={i} className={writing ? 'say say-live' : 'say'}>
+                            {b.text}
+                        </p>
+                    ) : null;
+                }
+                if (b.type === 'tool_use') {
+                    const [label, unit] = PENDING[b.name] ?? [`正在调用 ${b.name}`, '项'];
+                    const n = countSoFar(b.name, b.partialJson);
+                    return (
+                        <div key={i} className="op op-pending" role="status">
+                            <p className="op-title">
+                                {label}
+                                <span aria-hidden>…</span>
+                            </p>
+                            <p className="op-detail">{n ? `已写好 ${n} ${unit}，写完后一起画到白板上` : '正在写参数'}</p>
+                        </div>
+                    );
+                }
+                return null;
+            })}
+        </>
+    );
 }
