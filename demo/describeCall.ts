@@ -18,7 +18,7 @@ const field = (v: unknown, k: string) => (typeof v === 'object' && v !== null ? 
 export function describeCall(call: ToolCall, result: ToolCallResult): { kind: CallKind; title: string; detail?: string } {
     const kind: CallKind = !result.ok && !result.created.length && !result.updated.length && !result.deleted.length
         ? 'error'
-        : call.name === 'add_shapes' || call.name === 'add_diagram' ? 'add' : call.name === 'delete_shapes' ? 'delete' : 'update';
+        : call.name === 'add_shapes' || call.name === 'add_diagram' || call.name === 'draw_sketch' ? 'add' : call.name === 'delete_shapes' ? 'delete' : 'update';
 
     switch (call.name) {
         case 'add_shapes': {
@@ -49,6 +49,14 @@ export function describeCall(call: ToolCall, result: ToolCallResult): { kind: Ca
                 kind,
                 title: kind === 'error' ? '想画一张图，但结构有误' : '自动排版了一张图',
                 detail: parts.join('、'),
+            };
+        }
+        case 'draw_sketch': {
+            const strokes = list(field(call.input, 'strokes')).length;
+            return {
+                kind,
+                title: kind === 'error' ? '想画一幅线稿，但路径有误' : '手绘了一幅线稿',
+                detail: `${strokes} 笔，成为 ${result.created.length} 条笔迹`,
             };
         }
         case 'delete_shapes': {

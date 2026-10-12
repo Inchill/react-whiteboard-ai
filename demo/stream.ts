@@ -148,7 +148,12 @@ export function toAssistantContent(m: LiveMessage): unknown[] {
 
 /** Rough progress from a half-written tool input, e.g. how many shapes the model has written so far. */
 export function countSoFar(name: string, partialJson: string): number {
-    const pattern =
-        name === 'add_shapes' ? /"type"\s*:/g : name === 'update_shapes' || name === 'add_diagram' ? /"id"\s*:/g : /"[^"]+"\s*[,\]]/g;
+    const patterns: Record<string, RegExp> = {
+        add_shapes: /"type"\s*:/g,
+        update_shapes: /"id"\s*:/g,
+        add_diagram: /"id"\s*:/g,
+        draw_sketch: /"d"\s*:/g,
+    };
+    const pattern = patterns[name] ?? /"[^"]+"\s*[,\]]/g;
     return partialJson.match(pattern)?.length ?? 0;
 }
