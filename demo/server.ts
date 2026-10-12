@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
-import { buildSystemPrompt } from '../src/prompts/system';
-import { toAnthropicTools } from '../src/tools/schema';
+import { callModel, MAX_TOKENS, modelOf, type ProviderName, type Target } from './modelRequest';
 
 const send = (res: ServerResponse, status: number, body: unknown) => {
     res.statusCode = status;
@@ -46,36 +45,16 @@ class EventTally {
     }
 }
 
-/**
- * DeepSeek's reasoning models think by default, so "off" has to be said explicitly; Claude only
- * thinks when asked. DeepSeek ignores budget_tokens; Claude needs it below max_tokens.
- */
-function thinkingParam(provider: ProviderName, on: boolean, maxTokens: number) {
-    if (on) return { type: 'enabled', budget_tokens: Math.min(8000, Math.floor(maxTokens / 2)) };
-    return provider === 'deepseek' ? { type: 'disabled' } : null;
-}
-
-export type ProviderName = 'anthropic' | 'deepseek';
-type Provider = { name: ProviderName; url: string; key: string; model: string };
-
-/**
- * Both providers speak the Anthropic Messages format: DeepSeek offers a compatible
- * endpoint, so tool calls work the same way and the page needs no per-provider code.
- */
-function makeProvider(name: ProviderName, key: string, model?: string, baseUrl?: string): Provider {
-    if (name === 'deepseek') {
-        return { name, key, url: 'https://api.deepseek.com/anthropic/v1/messages', model: model || 'deepseek-flash' };
-    }
-    const base = (baseUrl || 'https://api.anthropic.com').replace(/\/$/, '');
-    return { name, key, url: `${base}/v1/messages`, model: model || 'claude-sonnet-5-5' };
-}
+type Provider = Target & { name: ProviderName };
 
 /** The provider configured in .env.local, used when the page sends no key of its own. */
 function providerFromEnv(env: Record<string, string>): Provider | null {
     const wanted = env.AI_PROVIDER || (env.ANTHROPIC_API_KEY ? 'anthropic' : env.DEEPSEEK_API_KEY ? 'deepseek' : '');
-    if (wanted === 'deepseek' && env.DEEPSEEK_API_KEY) return makeProvider('deepseek', env.DEEPSEEK_API_KEY, env.DEEPSEEK_MODEL);
+    if (wanted === 'deepseek' && env.DEEPSEEK_API_KEY) {
+        return { name: 'deepseek', provider: 'deepseek', key: env.DEEPSEEK_API_KEY, model: env.DEEPSEEK_MODEL };
+    }
     if (wanted === 'anthropic' && env.ANTHROPIC_API_KEY) {
-        return makeProvider('anthropic', env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL, env.ANTHROPIC_BASE_URL);
+        return { name: 'anthropic', provider: 'anthropic', key: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL, baseUrl: env.ANTHROPIC_BASE_URL };
     }
     return null;
 }
@@ -91,7 +70,7 @@ function providerFromRequest(req: IncomingMessage): Provider | null | 'invalid' 
     if (!key) return null;
     const name = header(req, 'x-ai-provider');
     if (name !== 'anthropic' && name !== 'deepseek') return 'invalid';
-    return makeProvider(name, key, header(req, 'x-ai-model'));
+    return { name, provider: name, key, model: header(req, 'x-ai-model'), baseUrl: header(req, 'x-ai-base-url') };
 }
 
 /**
@@ -100,14 +79,13 @@ function providerFromRequest(req: IncomingMessage): Provider | null | 'invalid' 
  */
 export function aiProxy(env: Record<string, string>): Plugin {
     const fallback = providerFromEnv(env);
-    // Reasoning models spend part of this on thinking, so leave plenty of room for the answer.
-    const maxTokens = Number(env.AI_MAX_TOKENS) > 0 ? Number(env.AI_MAX_TOKENS) : 16000;
+    const maxTokens = Number(env.AI_MAX_TOKENS) > 0 ? Number(env.AI_MAX_TOKENS) : MAX_TOKENS;
     return {
         name: 'whiteboard-ai-proxy',
         configureServer(server) {
             const log = (message: string) => server.config.logger.info(`[whiteboard-ai] ${message}`, { timestamp: true });
             server.middlewares.use('/api/status', (_req, res) =>
-                send(res, 200, fallback ? { provider: fallback.name, model: fallback.model } : null),
+                send(res, 200, fallback ? { provider: fallback.name, model: modelOf(fallback) } : null),
             );
             server.middlewares.use('/api/ai', async (req, res) => {
                 if (req.method !== 'POST') return send(res, 405, { error: 'POST only' });
@@ -121,32 +99,17 @@ export function aiProxy(env: Record<string, string>): Plugin {
                 res.on('close', () => abort.abort());
                 try {
                     const { messages } = JSON.parse(await readBody(req));
-                    const thinkingOn = (header(req, 'x-ai-thinking') ?? env.AI_THINKING) === 'on';
-                    const thinking = thinkingParam(provider.name, thinkingOn, maxTokens);
-                    const call = (withThinking: boolean) =>
-                        fetch(provider.url, {
-                            method: 'POST',
-                            signal: abort.signal,
-                            headers: { 'x-api-key': provider.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-                            body: JSON.stringify({
-                                model: provider.model,
-                                max_tokens: maxTokens,
-                                stream: true,
-                                system: buildSystemPrompt(),
-                                tools: toAnthropicTools(),
-                                messages,
-                                ...(withThinking && thinking ? { thinking } : {}),
-                            }),
-                        });
-                    let upstream = await call(true);
-                    // A model that does not accept the thinking setting still gets a normal request.
-                    if (upstream.status === 400 && thinking) {
-                        log(`${provider.name} ${provider.model}: rejected the thinking setting, retrying without it`);
-                        upstream = await call(false);
-                    }
+                    const label = `${provider.name} ${modelOf(provider)}`;
+                    const upstream = await callModel(provider, {
+                        messages,
+                        thinking: (header(req, 'x-ai-thinking') ?? env.AI_THINKING) === 'on',
+                        maxTokens,
+                        signal: abort.signal,
+                        onRetry: () => log(`${label}: rejected the thinking setting, retrying without it`),
+                    });
                     const type = upstream.headers.get('content-type') ?? '';
                     if (!upstream.ok || !upstream.body || !type.includes('text/event-stream')) {
-                        log(`${provider.name} ${provider.model}: HTTP ${upstream.status}, ${type || 'no content type'} (not streamed)`);
+                        log(`${label}: HTTP ${upstream.status}, ${type || 'no content type'} (not streamed)`);
                         return send(res, upstream.status, await upstream.text());
                     }
                     // Relay the server-sent events as they arrive.
@@ -158,7 +121,7 @@ export function aiProxy(env: Record<string, string>): Plugin {
                         res.write(r.value);
                     }
                     res.end();
-                    log(`${provider.name} ${provider.model}: ${tally.summary()}`);
+                    log(`${label}: ${tally.summary()}`);
                 } catch (e) {
                     if (abort.signal.aborted) return res.end();
                     if (res.headersSent) return res.end();

@@ -4,6 +4,7 @@ import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult }
 import { describeCall } from './describeCall';
 import { EXAMPLE_GROUPS, loadExampleGroup, saveExampleGroup } from './examples';
 import { SettingsPanel } from './SettingsPanel';
+import { callModel, messagesUrl } from './modelRequest';
 import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
 import {
     clearSettings,
@@ -23,7 +24,8 @@ type LogEntry =
     | { kind: 'say'; text: string }
     | { kind: 'thought'; text: string; seconds: number; open: boolean }
     | { kind: 'calls'; calls: ToolCall[]; results: ToolCallResult[] }
-    | { kind: 'error'; text: string; auth: boolean };
+    /** `fix`: label of a button that opens the settings, when the settings can fix the problem. */
+    | { kind: 'error'; text: string; fix?: string };
 
 type Message = { role: 'user' | 'assistant'; content: unknown };
 
@@ -32,6 +34,20 @@ const MAX_ROUNDS = 5;
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
+
+/**
+ * A built page (for GitHub Pages or any static host) has no dev server to proxy through, so it
+ * calls the provider straight from the browser with the key the visitor entered.
+ */
+const DIRECT = !import.meta.env.DEV;
+
+const hostOf = (s: AISettings) => {
+    try {
+        return new URL(messagesUrl(s)).host;
+    } catch {
+        return '接口地址';
+    }
+};
 
 export function App() {
     const board = useRef<WhiteboardHandle>(null);
@@ -72,6 +88,7 @@ export function App() {
     const canAsk = Boolean(settings || serverModel);
 
     useEffect(() => {
+        if (DIRECT) return;
         fetch('/api/status')
             .then((r) => r.json())
             .then((s) => setServerModel(s && PROVIDERS[s.provider as Provider] ? s : null))
@@ -150,21 +167,28 @@ export function App() {
         try {
             for (let round = 0; round < MAX_ROUNDS; round++) {
                 thinking.current = { start: 0, end: 0 };
-                const res = await fetch('/api/ai', {
-                    method: 'POST',
-                    signal: stop.signal,
-                    headers: {
-                        'content-type': 'application/json',
-                        'x-ai-thinking': deepThinking ? 'on' : 'off',
-                        ...(settings ? settingsHeaders(settings) : {}),
-                    },
-                    body: JSON.stringify({ messages }),
-                });
+                const res =
+                    DIRECT && settings
+                        ? await callModel(settings, { messages, thinking: deepThinking, signal: stop.signal, fromBrowser: true })
+                        : await fetch('/api/ai', {
+                            method: 'POST',
+                            signal: stop.signal,
+                            headers: {
+                                'content-type': 'application/json',
+                                'x-ai-thinking': deepThinking ? 'on' : 'off',
+                                ...(settings ? settingsHeaders(settings) : {}),
+                            },
+                            body: JSON.stringify({ messages }),
+                        });
                 if (!res.ok || !res.body) {
                     const data = await res.json().catch(() => ({}));
                     const detail = data.error?.message ?? data.error ?? `HTTP ${res.status}`;
                     const auth = res.status === 401 || res.status === 403;
-                    push({ kind: 'error', text: auth ? `模型拒绝了这个 API key（${res.status}）：${detail}` : `请求失败：${detail}`, auth });
+                    push({
+                        kind: 'error',
+                        text: auth ? `模型拒绝了这个 API key（${res.status}）：${detail}` : `请求失败：${detail}`,
+                        fix: auth ? '检查 API key' : undefined,
+                    });
                     return;
                 }
                 // The proxy streams; if the upstream answered in one piece instead, read it whole.
@@ -188,7 +212,6 @@ export function App() {
                     if (message.stopReason === 'max_tokens') {
                         push({
                             kind: 'error',
-                            auth: false,
                             text: said
                                 ? '模型的输出达到长度上限，回答被截断了。'
                                 : '模型把输出额度都用在了思考上，还没来得及画。可以把要求说得更具体一些，或者换一个思考更少的模型（比如 deepseek-flash）。',
@@ -210,7 +233,14 @@ export function App() {
             }
         } catch (err) {
             if (stop.signal.aborted) push({ kind: 'say', text: '已停止。这一轮还没写完的修改没有画到白板上。' });
-            else push({ kind: 'error', text: `出错了：${err instanceof Error ? err.message : String(err)}`, auth: false });
+            else if (DIRECT && err instanceof TypeError && settings) {
+                // A fetch that fails outright from a page is a blocked cross-origin request or no network.
+                push({
+                    kind: 'error',
+                    text: `浏览器连不上 ${hostOf(settings)}。这个服务可能不允许网页直接调用（跨域限制），可以在设置里填写一个代理的接口地址；也请检查网络连接。`,
+                    fix: '打开设置',
+                });
+            } else push({ kind: 'error', text: `出错了：${err instanceof Error ? err.message : String(err)}` });
         } finally {
             cancelAnimationFrame(frame);
             setLive(null);
@@ -267,6 +297,7 @@ export function App() {
                             <SettingsPanel
                                 settings={settings}
                                 hasServerKey={Boolean(serverModel)}
+                                direct={DIRECT}
                                 onSave={(s) => {
                                     saveSettings(s);
                                     setSettings(s);
@@ -415,9 +446,9 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
             return (
                 <div className="op op-error">
                     <p className="op-title">{entry.text}</p>
-                    {entry.auth && (
+                    {entry.fix && (
                         <button type="button" className="button-quiet" onClick={onOpenSettings}>
-                            检查 API key
+                            {entry.fix}
                         </button>
                     )}
                 </div>

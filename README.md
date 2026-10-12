@@ -24,6 +24,15 @@ The demo page sends your instructions, or one of the example prompts, to a model
 
 To connect a model, click the connection button in the panel header (“连接模型”), pick DeepSeek or Claude and paste an API key. It is kept in this tab only (or in the browser if you tick *Remember*) and sent to the local dev server, which forwards the request; it is never logged or stored there. Replies stream in: you see the model's words as it writes them and how many shapes it has written so far; the shapes land on the board together when the round is complete, as one undo step. You can also put `ANTHROPIC_API_KEY` or `DEEPSEEK_API_KEY` in `.env.local` instead (see `.env.example`); a key set on the page wins.
 
+## Deploy the demo
+
+```bash
+pnpm build:demo     # static files in dist-demo
+pnpm preview:demo   # check the build locally
+```
+
+`dist-demo` works on GitHub Pages or any static host, at any sub-path. With no server there, the page calls the provider straight from the visitor's browser with the key they enter, which stays in their browser. Claude allows this; if a provider refuses calls from web pages (CORS), visitors can enter a proxy of their own as the endpoint in the model settings.
+
 ## Install
 
 ```bash

@@ -1,17 +1,21 @@
-export type Provider = 'anthropic' | 'deepseek';
+import { ENDPOINTS, type ProviderName } from './modelRequest';
+
+export type Provider = ProviderName;
 
 export type AISettings = {
     provider: Provider;
     key: string;
     /** Empty means the provider's default model. */
     model: string;
+    /** Empty means the provider's own endpoint; otherwise a compatible endpoint or a proxy. */
+    baseUrl?: string;
     /** Keep in localStorage across sessions instead of sessionStorage (this tab only). */
     remember: boolean;
 };
 
 export const PROVIDERS: Record<Provider, { label: string; defaultModel: string; keyHint: string }> = {
-    deepseek: { label: 'DeepSeek', defaultModel: 'deepseek-flash', keyHint: 'sk-...' },
-    anthropic: { label: 'Claude', defaultModel: 'claude-sonnet-5-5', keyHint: 'sk-ant-...' },
+    deepseek: { label: 'DeepSeek', defaultModel: ENDPOINTS.deepseek.model, keyHint: 'sk-...' },
+    anthropic: { label: 'Claude', defaultModel: ENDPOINTS.anthropic.model, keyHint: 'sk-ant-...' },
 };
 
 const STORAGE_KEY = 'react-whiteboard-ai-demo:settings';
@@ -68,6 +72,7 @@ export const settingsHeaders = (s: AISettings): Record<string, string> => ({
     'x-ai-provider': s.provider,
     'x-ai-key': s.key,
     ...(s.model ? { 'x-ai-model': s.model } : {}),
+    ...(s.baseUrl ? { 'x-ai-base-url': s.baseUrl } : {}),
 });
 
 const THINKING_KEY = 'react-whiteboard-ai-demo:thinking';
