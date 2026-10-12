@@ -9,6 +9,9 @@ export type { ParseResult } from './tools/validate';
 export { applyOperations, executeToolCalls, formatToolResult, DEFAULTS } from './executor/apply';
 export type { ApplyOptions, OperationResult, ToolCall, ToolCallResult } from './executor/apply';
 
+export { layoutDiagram, DIAGRAM_STYLE } from './layout/diagram';
+export type { DiagramInput, DiagramNode, DiagramEdge, DiagramOptions, DiagramResult } from './layout/diagram';
+
 export { createWhiteboardAgent } from './agent';
 export type { WhiteboardAgent } from './agent';
 export { useWhiteboardAI } from './react/useWhiteboardAI';

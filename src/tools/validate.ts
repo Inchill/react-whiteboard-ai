@@ -1,3 +1,4 @@
+import type { DiagramEdge, DiagramInput, DiagramNode } from '../layout/diagram';
 import type { Operation, OperationName, ShapeInput, ShapePatch } from '../types';
 
 /** Limits that keep a confused model from producing unusable or huge documents. */
@@ -7,6 +8,7 @@ export const LIMITS = {
     fontSize: { min: 8, max: 200 },
     textLength: 2000,
     itemsPerOperation: 200,
+    diagram: { nodes: 60, edges: 120, labelLength: 80, idLength: 40 },
 } as const;
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; errors: string[] };
@@ -16,7 +18,7 @@ const STROKE_STYLES = ['solid', 'dashed', 'dotted'] as const;
 const FILLS = ['none', 'semi', 'solid'] as const;
 const BOX_TYPES = ['rect', 'ellipse', 'triangle'] as const;
 const LINEAR_TYPES = ['line', 'arrow'] as const;
-export const OPERATION_NAMES: OperationName[] = ['add_shapes', 'update_shapes', 'delete_shapes'];
+export const OPERATION_NAMES: OperationName[] = ['add_shapes', 'update_shapes', 'delete_shapes', 'add_diagram'];
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -205,6 +207,75 @@ function parsePatch(c: Checker, raw: unknown, path: string): ShapePatch | undefi
     return c.errors.length === before ? patch : undefined;
 }
 
+const short = (c: Checker, o: Obj, key: string, path: string, max: number, required: boolean): string | undefined => {
+    const v = c.text(o, key, path, required);
+    if (v !== undefined && v.length > max) {
+        c.fail(`${path}.${key}`, `is longer than ${max} characters`);
+        return undefined;
+    }
+    return v;
+};
+
+function parseDiagram(c: Checker, input: Obj): DiagramInput | undefined {
+    const before = c.errors.length;
+    const L = LIMITS.diagram;
+    c.unknownKeys(input, 'input', ['direction', 'nodes', 'edges', 'x', 'y']);
+    const direction = c.oneOf(input, 'direction', 'input', ['down', 'right'] as const);
+    const x = c.number(input, 'x', 'input');
+    const y = c.number(input, 'y', 'input');
+
+    const rawNodes = c.array(input, 'nodes', 'input') ?? [];
+    if (rawNodes.length > L.nodes) c.fail('input.nodes', `has more than ${L.nodes} nodes`);
+    const nodes: DiagramNode[] = [];
+    const ids = new Set<string>();
+    rawNodes.slice(0, L.nodes).forEach((raw, i) => {
+        const path = `input.nodes[${i}]`;
+        if (!isObj(raw)) return c.fail(path, 'expected an object');
+        c.unknownKeys(raw, path, ['id', 'label', 'layer', 'color', 'shape']);
+        const id = short(c, raw, 'id', path, L.idLength, true);
+        if (id && ids.has(id)) c.fail(`${path}.id`, `"${id}" is used by another node`);
+        if (id) ids.add(id);
+        const node = clean({
+            id: id!,
+            label: short(c, raw, 'label', path, L.labelLength, true)!,
+            layer: short(c, raw, 'layer', path, L.idLength, false),
+            color: c.color(raw, 'color', path),
+            shape: c.oneOf(raw, 'shape', path, ['box', 'ellipse'] as const),
+        });
+        nodes.push(node);
+    });
+    const withLayer = nodes.filter((n) => n.layer).length;
+    if (withLayer && withLayer < nodes.length) c.fail('input.nodes', 'give every node a layer, or none of them');
+
+    let edges: DiagramEdge[] | undefined;
+    if (input.edges !== undefined) {
+        if (!Array.isArray(input.edges)) c.fail('input.edges', 'expected an array');
+        else {
+            if (input.edges.length > L.edges) c.fail('input.edges', `has more than ${L.edges} edges`);
+            edges = [];
+            input.edges.slice(0, L.edges).forEach((raw, i) => {
+                const path = `input.edges[${i}]`;
+                if (!isObj(raw)) return c.fail(path, 'expected an object');
+                c.unknownKeys(raw, path, ['from', 'to', 'label', 'style']);
+                for (const end of ['from', 'to'] as const) {
+                    if (typeof raw[end] !== 'string' || !ids.has(raw[end] as string)) c.fail(`${path}.${end}`, 'expected the id of a node in this diagram');
+                }
+                if (raw.from === raw.to) c.fail(path, 'an edge cannot connect a node to itself');
+                edges!.push(
+                    clean({
+                        from: raw.from as string,
+                        to: raw.to as string,
+                        label: short(c, raw, 'label', path, L.labelLength, false),
+                        style: c.oneOf(raw, 'style', path, STROKE_STYLES),
+                    }),
+                );
+            });
+        }
+    }
+    if (c.errors.length > before) return undefined;
+    return clean({ direction, nodes, edges, x, y });
+}
+
 /**
  * Validate one tool call from a model. `name` is the tool name, `input` its parsed JSON arguments.
  * Returns every problem at once so they can go back to the model in a single tool result.
@@ -237,6 +308,11 @@ export function parseOperation(name: string, input: unknown): ParseResult<Operat
                 if (typeof id !== 'string' || !id) c.fail(`input.ids[${i}]`, 'expected a shape id');
             });
             if (items) op = { op: name, ids: items as string[] };
+            break;
+        }
+        case 'add_diagram': {
+            const diagram = parseDiagram(c, input);
+            if (diagram) op = { op: name, diagram };
             break;
         }
     }

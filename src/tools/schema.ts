@@ -62,7 +62,66 @@ const textShape = {
     additionalProperties: false,
 };
 
+const D = LIMITS.diagram;
+
+const diagramTool: ToolDefinition = {
+    name: 'add_diagram',
+    description:
+        'Draw a diagram of boxes joined by arrows: flowcharts, architecture or layer diagrams, org charts, trees, state machines, pipelines. ' +
+        'Give only the structure. Layout, box sizes, alignment, colors and arrow routing are automatic, the result is placed next to ' +
+        'existing content, and it stays editable. Prefer this over add_shapes whenever the picture is nodes and links.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            direction: { type: 'string', enum: ['down', 'right'], description: 'down: top to bottom (default). right: left to right, for pipelines and timelines.' },
+            nodes: {
+                type: 'array',
+                minItems: 1,
+                maxItems: D.nodes,
+                items: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string', maxLength: D.idLength, description: 'Short id used by edges, e.g. "gateway".' },
+                        label: { type: 'string', maxLength: D.labelLength, description: 'Text in the box. Keep it short; use \\n for a second line.' },
+                        layer: {
+                            type: 'string',
+                            maxLength: D.idLength,
+                            description:
+                                'Optional row name, e.g. "服务层". Give every node a layer or none. With layers, rows follow first use and get a labeled band; ' +
+                                'without, rows follow the arrows.',
+                        },
+                        color,
+                        shape: { type: 'string', enum: ['box', 'ellipse'], description: 'ellipse for start and end points of a flow. Default box.' },
+                    },
+                    required: ['id', 'label'],
+                    additionalProperties: false,
+                },
+            },
+            edges: {
+                type: 'array',
+                maxItems: D.edges,
+                items: {
+                    type: 'object',
+                    properties: {
+                        from: { type: 'string', description: 'Node id.' },
+                        to: { type: 'string', description: 'Node id.' },
+                        label: { type: 'string', maxLength: D.labelLength, description: 'Optional short text on the arrow, e.g. "是" / "否".' },
+                        style: { type: 'string', enum: ['solid', 'dashed', 'dotted'] },
+                    },
+                    required: ['from', 'to'],
+                    additionalProperties: false,
+                },
+            },
+            x: num('Optional left edge. Omit to place it beside existing content.'),
+            y: num('Optional top edge.'),
+        },
+        required: ['nodes'],
+        additionalProperties: false,
+    },
+};
+
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
+    diagramTool,
     {
         name: 'add_shapes',
         description:

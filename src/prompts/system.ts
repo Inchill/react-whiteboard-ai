@@ -38,7 +38,7 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         '- Start and end arrows on box edges, a few units away, never at box centers or inside text.',
         '- Use color to group or highlight, not on everything; "ink" plus one or two accents reads best.',
         '',
-        'Diagram style:',
+        'When you place shapes yourself with add_shapes:',
         '- Boxes: strokeWidth 2, fill "semi" with the stroke in the same accent color; labels in "ink" at fontSize 20. ' +
             'Boxes in a row share one width (wide enough for the longest label) and one center line.',
         '- Arrows and lines: strokeWidth 2 in "ink"; short labels beside them at fontSize 16.',
@@ -50,6 +50,8 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
             'so it sits behind the boxes, with the layer name at fontSize 16 inside the band\'s left edge. Bands share one width and line up.',
         '',
         'How to work:',
+        '- For anything made of boxes joined by arrows, call add_diagram with the structure and let it do the layout. ' +
+            'Use add_shapes for the rest: matrices, Venn diagrams, wireframes, charts, notes and highlights.',
         '- Refer to existing shapes only by the ids you were given. Never invent ids.',
         '- Put new content next to existing content, with roughly 40 units of space, unless the user asks for a specific place.',
         '- Keep sizes consistent with what is already on the board. Typical text is 20 units; a typical box is 120–240 units wide.',

@@ -1,4 +1,5 @@
-import { createId as defaultCreateId, measureText, translateShape } from '../geometry';
+import { createId as defaultCreateId, measureText, shapeBox, translateShape, unionBox } from '../geometry';
+import { layoutDiagram } from '../layout/diagram';
 import { parseOperation } from '../tools/validate';
 import { INK, type Operation, type Shape, type ShapeInput, type ShapePatch } from '../types';
 
@@ -13,6 +14,8 @@ export type OperationResult = {
     deleted: string[];
     /** Items that could not be applied (for example an unknown id). The rest of the operation still applies. */
     errors: string[];
+    /** add_diagram only: diagram node id → id of the box drawn for it. */
+    nodes?: Record<string, string>;
 };
 
 export type ApplyOptions = {
@@ -121,6 +124,15 @@ function applyOne(shapes: Shape[], op: Operation, createId: () => string): { sha
             });
             return { shapes: result.updated.length ? next : shapes, result };
         }
+        case 'add_diagram': {
+            // Unless told where, put the diagram to the right of what is already on the board.
+            const bounds = unionBox(shapes.map(shapeBox));
+            const origin = bounds ? { x: bounds.x + bounds.w + 80, y: bounds.y } : { x: 0, y: 0 };
+            const drawn = layoutDiagram(op.diagram, { createId, origin });
+            result.created = drawn.shapes.map((s) => s.id);
+            result.nodes = drawn.nodes;
+            return { shapes: [...shapes, ...drawn.shapes], result };
+        }
         case 'delete_shapes': {
             const existing = new Set(shapes.map((s) => s.id));
             const remove = new Set<string>();
@@ -162,11 +174,17 @@ export type ToolCallResult = {
     updated: string[];
     deleted: string[];
     errors: string[];
+    /** add_diagram only: diagram node id → id of the box drawn for it. */
+    nodes?: Record<string, string>;
 };
 
 /** Short text to send back to the model as the tool result. */
 export function formatToolResult(r: ToolCallResult): string {
     const parts: string[] = [];
+    if (r.nodes) {
+        const pairs = Object.entries(r.nodes).map(([node, box]) => `${node}=${box}`);
+        parts.push(`diagram drawn; node boxes: ${pairs.join(', ')}`);
+    }
     if (r.created.length) parts.push(`created ${r.created.join(', ')}`);
     if (r.updated.length) parts.push(`updated ${r.updated.join(', ')}`);
     if (r.deleted.length) parts.push(`deleted ${r.deleted.join(', ')}`);
@@ -187,7 +205,7 @@ export function executeToolCalls(shapes: Shape[], calls: ToolCall[], options: Ap
         const out = applyOperations(current, [parsed.value], options);
         current = out.shapes;
         const r = out.results[0];
-        return { ...base, ok: r.errors.length === 0, created: r.created, updated: r.updated, deleted: r.deleted, errors: r.errors };
+        return { ...base, ok: r.errors.length === 0, created: r.created, updated: r.updated, deleted: r.deleted, errors: r.errors, ...(r.nodes ? { nodes: r.nodes } : {}) };
     });
     return { shapes: current, results };
 }

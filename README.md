@@ -86,6 +86,7 @@ For OpenAI-compatible APIs use `toOpenAITools()` and parse each call's `function
 
 | Tool | Does |
 | --- | --- |
+| `add_diagram` | Boxes joined by arrows (flowcharts, architecture, org charts, trees, pipelines). The model gives nodes, layers and edges; layout, sizes, colors and arrow routing are automatic |
 | `add_shapes` | Add rectangles, ellipses, triangles, lines, arrows and text |
 | `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle or edit text by id |
 | `delete_shapes` | Delete by id |
@@ -99,6 +100,7 @@ For OpenAI-compatible APIs use `toOpenAITools()` and parse each call's `function
 | `describeBoard(shapes, { maxShapes })` | Board → JSON for the model |
 | `executeToolCalls(shapes, calls)` | Pure: validate + apply, returns new shapes and per-call results |
 | `applyOperations(shapes, ops)` | Pure: apply already-validated operations |
+| `layoutDiagram(input)` | Pure: lay out a node-and-arrow diagram as board shapes, without a model |
 | `parseOperation(name, input)` | Validate one tool call |
 | `formatToolResult(result)` | Short text to return to the model as the tool result |
 | `TOOL_DEFINITIONS`, `toAnthropicTools()`, `toOpenAITools()` | Tool schemas |
