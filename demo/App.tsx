@@ -140,7 +140,22 @@ export function App() {
                 }
                 for (const b of message.blocks) if (b.type === 'text' && b.text.trim()) push({ kind: 'say', text: b.text });
                 const calls = message.blocks.flatMap((b) => (b.type === 'tool_use' ? [{ id: b.id, name: b.name, input: b.input }] : []));
-                if (!calls.length) break;
+                if (!calls.length) {
+                    // Say why a round ended with nothing to show instead of going quiet.
+                    const said = message.blocks.some((b) => b.type === 'text' && b.text.trim());
+                    if (message.stopReason === 'max_tokens') {
+                        push({
+                            kind: 'error',
+                            auth: false,
+                            text: said
+                                ? '模型的输出达到长度上限，回答被截断了。'
+                                : '模型把输出额度都用在了思考上，还没来得及画。可以把要求说得更具体一些，或者换一个思考更少的模型（比如 deepseek-flash）。',
+                        });
+                    } else if (!said) {
+                        push({ kind: 'say', text: '模型这一轮没有回复，也没有修改白板。' });
+                    }
+                    break;
+                }
                 // Everything the model wrote this round lands on the board at once: one undo step.
                 const results = run(calls);
                 messages.push({

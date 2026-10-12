@@ -91,6 +91,8 @@ function providerFromRequest(req: IncomingMessage): Provider | null | 'invalid' 
  */
 export function aiProxy(env: Record<string, string>): Plugin {
     const fallback = providerFromEnv(env);
+    // Reasoning models spend part of this on thinking, so leave plenty of room for the answer.
+    const maxTokens = Number(env.AI_MAX_TOKENS) > 0 ? Number(env.AI_MAX_TOKENS) : 16000;
     return {
         name: 'whiteboard-ai-proxy',
         configureServer(server) {
@@ -116,7 +118,7 @@ export function aiProxy(env: Record<string, string>): Plugin {
                         headers: { 'x-api-key': provider.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
                         body: JSON.stringify({
                             model: provider.model,
-                            max_tokens: 4096,
+                            max_tokens: maxTokens,
                             stream: true,
                             system: buildSystemPrompt(),
                             tools: toAnthropicTools(),
