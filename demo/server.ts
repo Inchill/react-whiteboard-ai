@@ -66,7 +66,7 @@ export function aiProxy(env: Record<string, string>): Plugin {
         name: 'whiteboard-ai-proxy',
         configureServer(server) {
             server.middlewares.use('/api/status', (_req, res) =>
-                send(res, 200, { model: fallback ? `${fallback.name} · ${fallback.model}` : null }),
+                send(res, 200, fallback ? { provider: fallback.name, model: fallback.model } : null),
             );
             server.middlewares.use('/api/ai', async (req, res) => {
                 if (req.method !== 'POST') return send(res, 405, { error: 'POST only' });

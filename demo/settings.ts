@@ -61,7 +61,7 @@ export function clearSettings() {
     remove(() => localStorage);
 }
 
-export const modelLabel = (s: AISettings) => `${PROVIDERS[s.provider].label} · ${s.model || PROVIDERS[s.provider].defaultModel}`;
+export const modelInfo = (s: AISettings) => ({ provider: PROVIDERS[s.provider].label, model: s.model || PROVIDERS[s.provider].defaultModel });
 
 /** Headers the local dev proxy reads to use this key for one request. */
 export const settingsHeaders = (s: AISettings): Record<string, string> => ({
