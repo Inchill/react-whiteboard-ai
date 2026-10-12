@@ -13,5 +13,8 @@ export { createWhiteboardAgent } from './agent';
 export type { WhiteboardAgent } from './agent';
 export { useWhiteboardAI } from './react/useWhiteboardAI';
 
+export { buildSystemPrompt } from './prompts/system';
+export type { SystemPromptOptions } from './prompts/system';
+
 export { INK } from './types';
 export type { Operation, OperationName, ShapeInput, ShapePatch, BoxInput, LinearInput, TextInput, StyleInput } from './types';
