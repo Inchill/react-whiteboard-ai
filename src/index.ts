@@ -6,5 +6,8 @@ export type { ToolDefinition } from './tools/schema';
 export { parseOperation, LIMITS, OPERATION_NAMES } from './tools/validate';
 export type { ParseResult } from './tools/validate';
 
+export { applyOperations, executeToolCalls, formatToolResult, DEFAULTS } from './executor/apply';
+export type { ApplyOptions, OperationResult, ToolCall, ToolCallResult } from './executor/apply';
+
 export { INK } from './types';
 export type { Operation, OperationName, ShapeInput, ShapePatch, BoxInput, LinearInput, TextInput, StyleInput } from './types';
