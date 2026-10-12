@@ -392,7 +392,10 @@ button:disabled {
 
 .combo-name {
     flex: none;
-    width: 4.5em;
+    width: 6em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 13.5px;
     font-weight: 600;
     color: var(--pop-ink);
@@ -405,6 +408,68 @@ button:disabled {
     white-space: nowrap;
     font-size: 12px;
     color: var(--pop-muted);
+}
+
+.combo-remove {
+    flex: none;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: -2px -4px -2px auto;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--pop-muted);
+    opacity: 0;
+    cursor: pointer;
+}
+
+.combo-list li:hover .combo-remove,
+.combo-list li.is-active .combo-remove {
+    opacity: 1;
+}
+
+.combo-remove:hover {
+    background: color-mix(in srgb, var(--pop-ink) 10%, transparent);
+    color: var(--pop-ink);
+}
+
+.combo-add {
+    align-self: flex-start;
+    margin-top: -2px;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--pop-accent);
+    cursor: pointer;
+}
+
+.combo-add:hover {
+    text-decoration: underline;
+}
+
+.combo-naming {
+    display: flex;
+    gap: 6px;
+}
+
+.settings-field .combo-naming input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+}
+
+.combo-naming > button {
+    flex: none;
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 13px;
 }
 
 .combo-list li[aria-selected='true'] .combo-name {
@@ -439,7 +504,8 @@ button:disabled {
     padding-top: 4px;
 }
 
-.settings-actions > button:not(.button-primary):not(.button-quiet) {
+.settings-actions > button:not(.button-primary):not(.button-quiet),
+.combo-naming > button:not(.button-primary) {
     border: 1px solid var(--pop-line);
     border-radius: 10px;
     padding: 7px 14px;
@@ -447,7 +513,8 @@ button:disabled {
     color: var(--pop-ink);
 }
 
-.settings-actions > button:not(.button-primary):not(.button-quiet):hover {
+.settings-actions > button:not(.button-primary):not(.button-quiet):hover,
+.combo-naming > button:not(.button-primary):hover {
     background: var(--pop-field);
 }
 

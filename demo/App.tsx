@@ -4,7 +4,7 @@ import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult }
 import { describeCall } from './describeCall';
 import { EXAMPLE_GROUPS, loadExampleGroup, saveExampleGroup } from './examples';
 import { SettingsPanel } from './SettingsPanel';
-import { callModel, serviceName } from './modelRequest';
+import { callModel } from './modelRequest';
 import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
 import {
     clearSettings,
@@ -227,7 +227,7 @@ export function App() {
                 // A fetch that fails outright from a page is a blocked cross-origin request or no network.
                 push({
                     kind: 'error',
-                    text: `浏览器连不上 ${serviceName(settings.baseUrl)}。这个服务可能不允许网页直接调用（跨域限制），可以在设置里填写一个代理的接口地址；也请检查网络连接。`,
+                    text: `浏览器连不上 ${modelInfo(settings).service}。这个服务可能不允许网页直接调用（跨域限制），可以在设置里填写一个代理的接口地址；也请检查网络连接。`,
                     fix: '打开设置',
                 });
             } else push({ kind: 'error', text: `出错了：${err instanceof Error ? err.message : String(err)}` });

@@ -1,3 +1,4 @@
+import { loadCustomEndpoints } from './endpoints';
 import { serviceName } from './modelRequest';
 
 /** Any Anthropic-compatible endpoint: the user fills in all three. */
@@ -69,7 +70,8 @@ export function clearSettings() {
     remove(() => localStorage);
 }
 
-export const modelInfo = (s: Pick<AISettings, 'baseUrl' | 'model'>) => ({ service: serviceName(s.baseUrl), model: s.model });
+/** What the header shows: the service (by the user's own name for it, if any) and the model. */
+export const modelInfo = (s: Pick<AISettings, 'baseUrl' | 'model'>) => ({ service: serviceName(s.baseUrl, loadCustomEndpoints()), model: s.model });
 
 /** Headers the local dev proxy reads to use this endpoint and key for one request. */
 export const settingsHeaders = (s: AISettings): Record<string, string> => ({

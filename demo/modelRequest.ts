@@ -48,10 +48,17 @@ const hostOf = (baseUrl: string) => {
     }
 };
 
-/** A short name for the service behind an endpoint: a known one by name, otherwise its host. */
-export function serviceName(baseUrl: string): string {
+const sameEndpoint = (a: string, b: string) => messagesUrl(a) === messagesUrl(b);
+
+/**
+ * A short name for the service behind an endpoint: one the user named, a known one, otherwise its
+ * host. User-named endpoints match by full address, since a proxy may share a host with others.
+ */
+export function serviceName(baseUrl: string, named: readonly { name: string; url: string }[] = []): string {
     const host = hostOf(baseUrl);
     if (!host) return '接口地址';
+    const own = named.find((e) => sameEndpoint(e.url, baseUrl));
+    if (own) return own.name;
     if (host.endsWith('.maas.aliyuncs.com')) return '千问';
     return KNOWN_ENDPOINTS.find((e) => hostOf(e.url) === host)?.name ?? host;
 }
