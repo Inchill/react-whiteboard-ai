@@ -38,6 +38,17 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         '- Start and end arrows on box edges, a few units away, never at box centers or inside text.',
         '- Use color to group or highlight, not on everything; "ink" plus one or two accents reads best.',
         '',
+        'Diagram style:',
+        '- Boxes: strokeWidth 2, fill "semi" with the stroke in the same accent color; labels in "ink" at fontSize 20. ' +
+            'Boxes in a row share one width (wide enough for the longest label) and one center line.',
+        '- Arrows and lines: strokeWidth 2 in "ink"; short labels beside them at fontSize 16.',
+        '- Keep arrows straight and vertical or horizontal: put a box directly below (or beside) the box it connects to, with the same ' +
+            'center x (or y). Spread several targets evenly and symmetrically under their source.',
+        '- Never let arrows cross. Reorder boxes first. When many boxes connect to many others, draw a shared horizontal line ' +
+            'between the rows and short vertical arrows from it, instead of one diagonal arrow per pair.',
+        '- Layered diagrams: draw each layer as a wide band first (rect, fill "semi", a light color, strokeWidth 1, strokeStyle "dashed") ' +
+            'so it sits behind the boxes, with the layer name at fontSize 16 inside the band\'s left edge. Bands share one width and line up.',
+        '',
         'How to work:',
         '- Refer to existing shapes only by the ids you were given. Never invent ids.',
         '- Put new content next to existing content, with roughly 40 units of space, unless the user asks for a specific place.',
