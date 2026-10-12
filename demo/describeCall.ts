@@ -53,10 +53,11 @@ export function describeCall(call: ToolCall, result: ToolCallResult): { kind: Ca
         }
         case 'draw_sketch': {
             const strokes = list(field(call.input, 'strokes')).length;
+            const parts = list(field(call.input, 'parts')).length;
             return {
                 kind,
-                title: kind === 'error' ? '想画一幅线稿，但路径有误' : '手绘了一幅线稿',
-                detail: `${strokes} 笔，成为 ${result.created.length} 条笔迹`,
+                title: kind === 'error' ? '想画一幅线稿，但没通过检查' : '手绘了一幅线稿',
+                detail: kind === 'error' ? `规划了 ${parts} 个部分、${strokes} 笔` : `规划了 ${parts} 个部分，画了 ${strokes} 笔`,
             };
         }
         case 'delete_shapes': {

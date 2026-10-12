@@ -379,6 +379,7 @@ export function App() {
                                     </button>
                                 ))}
                             </div>
+                            {examples.hint && !deepThinking && <p className="examples-hint">{examples.hint}</p>}
                         </div>
                     )}
                     <div className="composer-box">

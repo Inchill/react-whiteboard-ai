@@ -1,5 +1,6 @@
 export type Example = { label: string; prompt: string };
-export type ExampleGroup = { id: string; label: string; examples: Example[] };
+/** `hint`: shown under the group's examples while deep thinking is off. */
+export type ExampleGroup = { id: string; label: string; hint?: string; examples: Example[] };
 
 /**
  * One-click prompts for a first visit, grouped by the tool they show off. Each prompt is specific
@@ -10,6 +11,7 @@ export const EXAMPLE_GROUPS: ExampleGroup[] = [
     {
         id: 'sketch',
         label: '手绘',
+        hint: '打开下方的「深度思考」，线稿会画得更准，但要多等一会儿。',
         examples: [
             { label: '小老鼠头像', prompt: '画一只圆耳朵的卡通小老鼠头像：粉色内耳，圆眼睛，小鼻子，两边各有几根胡须。' },
             { label: '坐着的小猫', prompt: '画一只坐着的小猫，侧着头，尾巴卷在身前。' },
