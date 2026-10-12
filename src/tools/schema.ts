@@ -126,11 +126,38 @@ const sketchTool: ToolDefinition = {
     name: 'draw_sketch',
     description:
         'Draw a line drawing as hand-drawn pen strokes: characters, animals, avatars, plants, objects, doodles, anything with curves. ' +
-        'Write SVG path data in a coordinate box (default 100 × 100, x right, y down); it is scaled onto the board, given a natural ' +
-        'hand-drawn line and placed next to existing content. Lines only, no fills.',
+        'Plan before drawing: say what the picture is and how it is posed (subject), give each part a box (parts), then draw each part ' +
+        'with strokes that stay in its box. Coordinates are in a drawing box (default 100 × 100, x right, y down) that is scaled onto ' +
+        'the board, given a natural hand-drawn line and placed next to existing content. Lines only, no fills.',
     inputSchema: {
         type: 'object',
         properties: {
+            subject: {
+                type: 'string',
+                maxLength: K.subjectLength,
+                description: 'Written first. What is drawn, the view and the pose, e.g. "a cat sitting, side view facing left, head turned to the viewer, tail curled around its paws".',
+            },
+            parts: {
+                type: 'array',
+                minItems: 1,
+                maxItems: K.parts,
+                description:
+                    'Written before the strokes. A box for every part of the picture, sized and placed as in the finished drawing: ' +
+                    'big masses (head, body) first, then what attaches to them (ears, legs, tail), then details (eyes, nose). ' +
+                    'Attached parts overlap the part they grow from; details sit inside it.',
+                items: {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'string', maxLength: K.partName, description: 'e.g. "head", "left ear", "tail".' },
+                        x: num('Left edge in the drawing box.'),
+                        y: num('Top edge in the drawing box.'),
+                        w: num('Width.', { exclusiveMinimum: 0 }),
+                        h: num('Height.', { exclusiveMinimum: 0 }),
+                    },
+                    required: ['name', 'x', 'y', 'w', 'h'],
+                    additionalProperties: false,
+                },
+            },
             strokes: {
                 type: 'array',
                 minItems: 1,
@@ -138,6 +165,7 @@ const sketchTool: ToolDefinition = {
                 items: {
                     type: 'object',
                     properties: {
+                        part: { type: 'string', maxLength: K.partName, description: 'The part this stroke draws. It must stay inside that part\'s box.' },
                         d: {
                             type: 'string',
                             maxLength: K.pathLength,
@@ -146,7 +174,7 @@ const sketchTool: ToolDefinition = {
                         color,
                         width: num('Pen width on the board. Default 3; 4–5 for bold outlines, 2 for fine detail.', { minimum: K.width.min, maximum: K.width.max }),
                     },
-                    required: ['d'],
+                    required: ['part', 'd'],
                     additionalProperties: false,
                 },
             },
@@ -156,7 +184,7 @@ const sketchTool: ToolDefinition = {
             x: num('Optional left edge on the board. Omit to place it beside existing content.'),
             y: num('Optional top edge on the board.'),
         },
-        required: ['strokes'],
+        required: ['subject', 'parts', 'strokes'],
         additionalProperties: false,
     },
 };

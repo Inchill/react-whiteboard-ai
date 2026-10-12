@@ -1,6 +1,6 @@
 import type { DiagramEdge, DiagramInput, DiagramNode } from '../layout/diagram';
-import { parsePath } from '../sketch/path';
-import type { SketchInput, SketchStroke } from '../sketch/sketch';
+import { parsePath, samplePath, type Subpath } from '../sketch/path';
+import { SKETCH_DEFAULTS, type SketchInput, type SketchPart, type SketchStroke } from '../sketch/sketch';
 import type { Operation, OperationName, ShapeInput, ShapePatch } from '../types';
 
 /** Limits that keep a confused model from producing unusable or huge documents. */
@@ -11,7 +11,7 @@ export const LIMITS = {
     textLength: 2000,
     itemsPerOperation: 200,
     diagram: { nodes: 60, edges: 120, labelLength: 80, idLength: 40 },
-    sketch: { strokes: 120, pathLength: 4000, totalPathLength: 40000, width: { min: 1, max: 16 }, size: { min: 40, max: 2000 } },
+    sketch: { parts: 30, partName: 40, subjectLength: 200, strokes: 120, pathLength: 4000, totalPathLength: 40000, width: { min: 1, max: 16 }, size: { min: 40, max: 2000 } },
 } as const;
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; errors: string[] };
@@ -282,37 +282,108 @@ function parseDiagram(c: Checker, input: Obj): DiagramInput | undefined {
 function parseSketch(c: Checker, input: Obj): SketchInput | undefined {
     const before = c.errors.length;
     const L = LIMITS.sketch;
-    c.unknownKeys(input, 'input', ['width', 'height', 'strokes', 'size', 'x', 'y']);
+    c.unknownKeys(input, 'input', ['subject', 'width', 'height', 'parts', 'strokes', 'size', 'x', 'y']);
+    const subject = short(c, input, 'subject', 'input', L.subjectLength, true);
     const width = c.number(input, 'width', 'input', { min: 1, max: 10000 });
     const height = c.number(input, 'height', 'input', { min: 1, max: 10000 });
     const size = c.number(input, 'size', 'input', L.size);
     const x = c.number(input, 'x', 'input');
     const y = c.number(input, 'y', 'input');
+    const boxW = width ?? SKETCH_DEFAULTS.box;
+    const boxH = height ?? SKETCH_DEFAULTS.box;
+
+    const parts = new Map<string, SketchPart>();
+    const partIndex = new Map<string, number>();
+    const rawParts = c.array(input, 'parts', 'input') ?? [];
+    if (rawParts.length > L.parts) c.fail('input.parts', `has more than ${L.parts} parts; group small details into one part`);
+    rawParts.slice(0, L.parts).forEach((item, i) => {
+        const path = `input.parts[${i}]`;
+        if (!isObj(item)) return c.fail(path, 'expected an object');
+        c.unknownKeys(item, path, ['name', 'x', 'y', 'w', 'h']);
+        const name = short(c, item, 'name', path, L.partName, true);
+        const box = {
+            x: c.number(item, 'x', path, { required: true }),
+            y: c.number(item, 'y', path, { required: true }),
+            w: c.number(item, 'w', path, { required: true, min: 0.5 }),
+            h: c.number(item, 'h', path, { required: true, min: 0.5 }),
+        };
+        if (name === undefined || box.x === undefined || box.y === undefined || box.w === undefined || box.h === undefined) return;
+        if (parts.has(name)) return c.fail(`${path}.name`, `"${name}" is used by another part; give each part its own name`);
+        const part = { name, x: box.x, y: box.y, w: box.w, h: box.h };
+        const slack = 0.05 * Math.max(boxW, boxH);
+        if (part.x < -slack || part.y < -slack || part.x + part.w > boxW + slack || part.y + part.h > boxH + slack) {
+            c.fail(path, `"${name}" (${area(part)}) is outside the ${boxW} × ${boxH} drawing box`);
+        }
+        parts.set(name, part);
+        partIndex.set(name, i);
+    });
+
     const raw = c.array(input, 'strokes', 'input') ?? [];
     if (raw.length > L.strokes) c.fail('input.strokes', `has more than ${L.strokes} strokes`);
     let total = 0;
+    const used = new Set<string>();
     const strokes: SketchStroke[] = [];
     raw.slice(0, L.strokes).forEach((item, i) => {
         const path = `input.strokes[${i}]`;
         if (!isObj(item)) return c.fail(path, 'expected an object');
-        c.unknownKeys(item, path, ['d', 'color', 'width']);
+        c.unknownKeys(item, path, ['part', 'd', 'color', 'width']);
+        const partName = short(c, item, 'part', path, L.partName, true);
+        const part = partName === undefined ? undefined : parts.get(partName);
+        if (partName !== undefined) {
+            if (part) used.add(partName);
+            else if (rawParts.length) c.fail(`${path}.part`, `"${partName}" is not one of the parts: ${[...parts.keys()].join(', ')}`);
+        }
         const d = c.text(item, 'd', path, true);
         if (d !== undefined) {
             total += d.length;
             if (d.length > L.pathLength) c.fail(`${path}.d`, `is longer than ${L.pathLength} characters; split it into several strokes`);
             else {
                 try {
-                    if (!parsePath(d).length) c.fail(`${path}.d`, 'draws nothing');
+                    const subpaths = parsePath(d);
+                    if (!subpaths.length) c.fail(`${path}.d`, 'draws nothing');
+                    else if (part) checkInside(c, path, subpaths, part, Math.max(boxW, boxH));
                 } catch (e) {
                     c.fail(`${path}.d`, `is not valid SVG path data: ${e instanceof Error ? e.message : String(e)}`);
                 }
             }
         }
-        strokes.push(clean({ d: d!, color: c.color(item, 'color', path), width: c.number(item, 'width', path, L.width) }));
+        strokes.push(clean({ part: partName, d: d!, color: c.color(item, 'color', path), width: c.number(item, 'width', path, L.width) }));
     });
     if (total > L.totalPathLength) c.fail('input.strokes', `has more than ${L.totalPathLength} characters of path data in total`);
+    if (raw.length) {
+        parts.forEach((p) => {
+            if (!used.has(p.name)) c.fail(`input.parts[${partIndex.get(p.name)}]`, `"${p.name}" has no strokes; draw it or remove it from parts`);
+        });
+    }
     if (c.errors.length > before) return undefined;
-    return clean({ width, height, strokes, size, x, y });
+    return clean({ subject, width, height, parts: [...parts.values()], strokes, size, x, y });
+}
+
+const r0 = (n: number) => Math.round(n);
+const area = (p: SketchPart) => `x ${r0(p.x)}–${r0(p.x + p.w)}, y ${r0(p.y)}–${r0(p.y + p.h)}`;
+
+/**
+ * A stroke that wanders far from its part's box means the coordinates and the plan disagree, which
+ * is how a tail ends up across the face. A little overshoot is fine: hand drawing is not exact.
+ */
+function checkInside(c: Checker, path: string, subpaths: Subpath[], part: SketchPart, extent: number) {
+    const tolerance = 0.2 * Math.max(part.w, part.h) + 0.03 * extent;
+    let worst = { d: 0, x: 0, y: 0 };
+    for (const sub of subpaths) {
+        for (const p of samplePath(sub, extent / 100)) {
+            const dx = Math.max(part.x - p.x, 0, p.x - (part.x + part.w));
+            const dy = Math.max(part.y - p.y, 0, p.y - (part.y + part.h));
+            const d = Math.hypot(dx, dy);
+            if (d > worst.d) worst = { d, x: p.x, y: p.y };
+        }
+    }
+    if (worst.d > tolerance) {
+        c.fail(
+            `${path}.d`,
+            `reaches (${r0(worst.x)}, ${r0(worst.y)}), outside part "${part.name}" (${area(part)}). ` +
+                'Keep each stroke in its part, or fix the part\'s box if the plan was wrong.',
+        );
+    }
 }
 
 /**

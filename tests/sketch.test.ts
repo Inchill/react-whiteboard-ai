@@ -99,8 +99,14 @@ describe('sketchToShapes', () => {
 });
 
 describe('draw_sketch tool', () => {
+    const plan = { subject: 'test', parts: [{ name: 'all', x: 0, y: 0, w: 100, h: 100 }] };
+
     it('validates strokes and reports bad path data with its position', () => {
-        const r = parseOperation('draw_sketch', { strokes: [{ d: 'M0 0 L10 10' }, { d: 'Z9' }, { d: 'M0 0 C1 2 3' }, { d: 'M0 0', width: 99 }], size: 5 });
+        const r = parseOperation('draw_sketch', {
+            ...plan,
+            strokes: [{ part: 'all', d: 'M0 0 L10 10' }, { part: 'all', d: 'Z9' }, { part: 'all', d: 'M0 0 C1 2 3' }, { part: 'all', d: 'M0 0', width: 99 }],
+            size: 5,
+        });
         expect(r.ok).toBe(false);
         if (r.ok) return;
         expect(r.errors).toEqual([
@@ -112,9 +118,48 @@ describe('draw_sketch tool', () => {
         ]);
     });
 
+    it('requires a plan: a subject, parts, and a part for every stroke', () => {
+        const r = parseOperation('draw_sketch', { strokes: [{ d: 'M0 0 L10 10' }] });
+        expect(r).toMatchObject({
+            ok: false,
+            errors: ['input.subject: is required', 'input.parts: expected an array', 'input.strokes[0].part: is required'],
+        });
+    });
+
+    it('checks that the plan and the strokes agree', () => {
+        const r = parseOperation('draw_sketch', {
+            subject: 'a cat',
+            parts: [
+                { name: 'head', x: 30, y: 10, w: 40, h: 35 },
+                { name: 'body', x: 25, y: 40, w: 50, h: 55 },
+                { name: 'tail', x: 70, y: 60, w: 25, h: 30 },
+                { name: 'head', x: 0, y: 0, w: 10, h: 10 },
+                { name: 'moon', x: 90, y: -20, w: 30, h: 30 },
+            ],
+            strokes: [
+                // Slight overshoot is fine.
+                { part: 'head', d: 'M30 28 A20 17 0 1 1 72 28 A20 17 0 1 1 30 28 Z' },
+                // A tail drawn across the face is not.
+                { part: 'tail', d: 'M75 80 C90 60 60 20 40 25' },
+                { part: 'whiskers', d: 'M30 30 L20 28' },
+            ],
+        });
+        expect(r.ok).toBe(false);
+        if (r.ok) return;
+        expect(r.errors).toEqual([
+            'input.parts[3].name: "head" is used by another part; give each part its own name',
+            'input.parts[4]: "moon" (x 90–120, y -20–10) is outside the 100 × 100 drawing box',
+            'input.strokes[1].d: reaches (40, 25), outside part "tail" (x 70–95, y 60–90). Keep each stroke in its part, or fix the part\'s box if the plan was wrong.',
+            'input.strokes[2].part: "whiskers" is not one of the parts: head, body, tail, moon',
+            'input.parts[1]: "body" has no strokes; draw it or remove it from parts',
+            'input.parts[4]: "moon" has no strokes; draw it or remove it from parts',
+        ]);
+    });
+
     it('places the drawing beside existing content', () => {
         const existing: Shape = { id: 'old', type: 'rect', x: 0, y: 0, w: 100, h: 100, fill: 'none', color: 'ink', strokeWidth: 2, strokeStyle: 'solid' };
-        const { shapes, results } = executeToolCalls([existing], [{ name: 'draw_sketch', input: { strokes: [{ d: 'M0 0 L100 0' }] } }]);
+        const input = { ...plan, strokes: [{ part: 'all', d: 'M0 0 L100 0' }] };
+        const { shapes, results } = executeToolCalls([existing], [{ name: 'draw_sketch', input }]);
         expect(results[0].ok).toBe(true);
         const pen = shapes[1] as Pen;
         expect(pen.points[0][0]).toBeCloseTo(180, 0);

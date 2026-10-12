@@ -12,13 +12,22 @@ import { parsePath, samplePath, type Pt } from './path';
 export type SketchStroke = {
     /** SVG path data in the sketch's own coordinates, e.g. "M10 50 C 20 10, 80 10, 90 50". */
     d: string;
+    /** Name of the part this stroke draws, from `parts`. */
+    part?: string;
     /** "ink" (default) or a hex color. */
     color?: string;
     /** Pen width on the board. Default 3. */
     width?: number;
 };
 
+/** A planned region of the drawing, in the sketch's own coordinates. */
+export type SketchPart = { name: string; x: number; y: number; w: number; h: number };
+
 export type SketchInput = {
+    /** What is drawn and how it is posed, in a few words. The plan before any coordinates. */
+    subject?: string;
+    /** Where each part goes. The draw_sketch tool requires them; they are not drawn. */
+    parts?: SketchPart[];
     /** Size of the coordinate box the paths are written in. Default 100 × 100, y grows down. */
     width?: number;
     height?: number;
