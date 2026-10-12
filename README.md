@@ -164,7 +164,7 @@ export async function handle({ messages }) {
 
 **Other providers**
 
-- **DeepSeek** has an Anthropic-compatible endpoint. Use the same code with `baseURL: 'https://api.deepseek.com/anthropic'` and a DeepSeek key and model.
+- **DeepSeek, Qwen, GLM, Doubao** and others have Anthropic-compatible endpoints (see [Connect a model](#connect-a-model)). Use the same code with that `baseURL` and the service's key and model.
 - **OpenAI-compatible APIs** use `toOpenAITools()`. Parse each call's `function.arguments` as JSON before passing it as `input`.
 
 Give the model room to work: a diagram or sketch is a large tool input, and reasoning models also spend tokens on thinking. A `max_tokens` around 16000 is safe.
@@ -214,26 +214,29 @@ The demo is a whiteboard with a chat panel. It shows:
 
 ### Connect a model
 
-Click **连接模型** in the panel header and choose a provider:
+Click **连接模型** in the panel header and fill in three fields: the endpoint, an API key and the model. Any service that speaks the Anthropic Messages format works, and the endpoint field suggests some:
 
-| Provider | Endpoint | Default model |
-| --- | --- | --- |
-| DeepSeek | `https://api.deepseek.com/anthropic` | `deepseek-flash` |
-| Claude | `https://api.anthropic.com` | `claude-sonnet-5-5` |
+| Service | Endpoint |
+| --- | --- |
+| DeepSeek | `https://api.deepseek.com/anthropic` |
+| Qwen (Alibaba Cloud Model Studio) | `https://dashscope.aliyuncs.com/apps/anthropic` |
+| GLM (Zhipu) | `https://open.bigmodel.cn/api/anthropic` |
+| Doubao (Volcengine Ark) | `https://ark.cn-beijing.volces.com/api/compatible` |
+| Claude | `https://api.anthropic.com` |
 
-Enter an API key and, optionally, a model and an endpoint. The endpoint can be any Anthropic-compatible gateway or your own proxy. The key is kept in this tab only, or in the browser if you tick *在这个浏览器里记住*.
+The endpoint can also be any other compatible gateway or your own proxy. Model names change often, so check each service's documentation for current ones. The key is sent with both `x-api-key` and, except to Anthropic, `Authorization: Bearer`, since compatible services differ in which they read. The deep-thinking switch sends `thinking` enabled or disabled explicitly, because services differ in whether a model thinks by default; if a service rejects the request, it is retried once without it. Settings are kept in this tab only, or in the browser if you tick *在这个浏览器里记住*.
 
 In `pnpm dev`, requests go through a small proxy in the Vite dev server, which forwards them and streams the reply back. The proxy never logs or stores keys. It prints one line per request with timing and event counts, never content.
 
-You can also put a key in `.env.local` (copy `.env.example`), so you do not have to enter one on the page. A key entered on the page takes precedence.
+You can also configure the model in `.env.local` (copy `.env.example`), so you do not have to enter it on the page. Settings entered on the page take precedence.
 
 | Variable | |
 | --- | --- |
-| `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` | DeepSeek key and optional model |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL` | Claude key, optional model and gateway |
-| `AI_PROVIDER` | `deepseek` or `anthropic`, when both keys are set |
+| `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` | Endpoint, key and model |
 | `AI_THINKING` | `on` to think by default. The page switch overrides it |
 | `AI_MAX_TOKENS` | Default 16000. Thinking counts toward it |
+
+Older files with `DEEPSEEK_API_KEY` or `ANTHROPIC_API_KEY` (and `AI_PROVIDER` to choose between them) still work.
 
 Variables exported in your shell take precedence over `.env.local`.
 
@@ -244,10 +247,10 @@ pnpm build:demo     # static files in dist-demo
 pnpm preview:demo   # check the build locally
 ```
 
-`dist-demo` works on any static host, at any sub-path. A static host has no server to proxy through, so the deployed page calls the provider straight from the visitor's browser with the key they enter, and the key never leaves their browser.
+`dist-demo` works on any static host, at any sub-path. A static host has no server to proxy through, so the deployed page calls the model straight from the visitor's browser with the key they enter, and the key never leaves their browser.
 
 - **Claude** allows browser calls (the page sends the required opt-in header).
-- **Other providers**: if one refuses calls from web pages (a CORS error), the page says so. Visitors can then enter a proxy of their own as the endpoint.
+- **Other services**: whether they accept calls from web pages is up to each one. If one refuses (a CORS error), the page says so, and visitors can enter a proxy of their own as the endpoint.
 
 To publish from GitHub Actions:
 
