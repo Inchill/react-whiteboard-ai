@@ -9,5 +9,9 @@ export type { ParseResult } from './tools/validate';
 export { applyOperations, executeToolCalls, formatToolResult, DEFAULTS } from './executor/apply';
 export type { ApplyOptions, OperationResult, ToolCall, ToolCallResult } from './executor/apply';
 
+export { createWhiteboardAgent } from './agent';
+export type { WhiteboardAgent } from './agent';
+export { useWhiteboardAI } from './react/useWhiteboardAI';
+
 export { INK } from './types';
 export type { Operation, OperationName, ShapeInput, ShapePatch, BoxInput, LinearInput, TextInput, StyleInput } from './types';
