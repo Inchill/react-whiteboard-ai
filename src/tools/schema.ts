@@ -154,7 +154,8 @@ const sketchTool: ToolDefinition = {
                             maxLength: K.partName,
                             description:
                                 'The part this one grows from: a tail or a leg is on "body", an ear on "head", a handle on "cup". Its strokes ' +
-                                'must touch that part\'s strokes. Omit for the main part, for details inside a part, and for things that float ' +
+                                'should touch that part\'s strokes; a small gap is closed by moving this part (with what is on or in it), ' +
+                                'a large one is an error. Omit for the main part, for details inside a part, and for things that float ' +
                                 'free (clouds, steam).',
                         },
                         x: num('Left edge in the drawing box.'),

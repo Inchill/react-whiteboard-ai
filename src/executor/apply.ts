@@ -1,5 +1,6 @@
 import { createId as defaultCreateId, measureText, shapeBox, translateShape, unionBox } from '../geometry';
 import { layoutDiagram } from '../layout/diagram';
+import { joinParts } from '../sketch/join';
 import { sketchToShapes } from '../sketch/sketch';
 import { parseOperation } from '../tools/validate';
 import { INK, type Operation, type Shape, type ShapeInput, type ShapePatch } from '../types';
@@ -17,6 +18,8 @@ export type OperationResult = {
     errors: string[];
     /** add_diagram only: diagram node id → id of the box drawn for it. */
     nodes?: Record<string, string>;
+    /** Adjustments made while drawing that the model should know about, e.g. a sketch part moved to join another. */
+    notes?: string[];
 };
 
 export type ApplyOptions = {
@@ -134,6 +137,8 @@ function applyOne(shapes: Shape[], op: Operation, createId: () => string): { sha
         case 'draw_sketch': {
             const drawn = sketchToShapes(op.sketch, { createId, origin: besideContent(shapes) });
             result.created = drawn.map((s) => s.id);
+            const moves = joinParts(op.sketch);
+            if (moves.length) result.notes = moves.map((m) => `moved "${m.part}" by (${m.dx}, ${m.dy}) to join "${m.on}"`);
             return { shapes: [...shapes, ...drawn], result };
         }
         case 'add_diagram': {
@@ -187,6 +192,7 @@ export type ToolCallResult = {
     errors: string[];
     /** add_diagram only: diagram node id → id of the box drawn for it. */
     nodes?: Record<string, string>;
+    notes?: string[];
 };
 
 /** Short text to send back to the model as the tool result. */
@@ -199,6 +205,7 @@ export function formatToolResult(r: ToolCallResult): string {
     if (r.created.length) parts.push(`created ${r.created.join(', ')}`);
     if (r.updated.length) parts.push(`updated ${r.updated.join(', ')}`);
     if (r.deleted.length) parts.push(`deleted ${r.deleted.join(', ')}`);
+    if (r.notes?.length) parts.push(`adjusted: ${r.notes.join('; ')}`);
     if (r.errors.length) parts.push(`errors:\n- ${r.errors.join('\n- ')}`);
     return parts.join('\n') || 'no changes';
 }
@@ -216,7 +223,7 @@ export function executeToolCalls(shapes: Shape[], calls: ToolCall[], options: Ap
         const out = applyOperations(current, [parsed.value], options);
         current = out.shapes;
         const r = out.results[0];
-        return { ...base, ok: r.errors.length === 0, created: r.created, updated: r.updated, deleted: r.deleted, errors: r.errors, ...(r.nodes ? { nodes: r.nodes } : {}) };
+        return { ...base, ok: r.errors.length === 0, created: r.created, updated: r.updated, deleted: r.deleted, errors: r.errors, ...(r.nodes ? { nodes: r.nodes } : {}), ...(r.notes ? { notes: r.notes } : {}) };
     });
     return { shapes: current, results };
 }

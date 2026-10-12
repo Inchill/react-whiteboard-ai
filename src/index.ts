@@ -15,6 +15,8 @@ export type { DiagramInput, DiagramNode, DiagramEdge, DiagramOptions, DiagramRes
 export { sketchToShapes, humanize, SKETCH_DEFAULTS } from './sketch/sketch';
 export type { SketchInput, SketchPart, SketchStroke, SketchOptions } from './sketch/sketch';
 export { parsePath, samplePath, PathSyntaxError } from './sketch/path';
+export { joinParts, JOIN } from './sketch/join';
+export type { PartMove } from './sketch/join';
 
 export { createWhiteboardAgent } from './agent';
 export type { WhiteboardAgent } from './agent';

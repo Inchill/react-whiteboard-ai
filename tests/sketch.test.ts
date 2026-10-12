@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { executeToolCalls, parseOperation, parsePath, PathSyntaxError, samplePath, sketchToShapes } from '../src';
+import { executeToolCalls, formatToolResult, parseOperation, parsePath, PathSyntaxError, samplePath, sketchToShapes } from '../src';
+import { joinOffsets } from '../src/sketch/join';
 import type { Shape } from '../src/types';
 
 type Pen = Extract<Shape, { points: unknown }>;
@@ -156,37 +157,87 @@ describe('draw_sketch tool', () => {
         ]);
     });
 
-    it('checks that a part drawn on another touches it', () => {
-        const input = {
+    it('rejects a part far from the part it is on, and an "on" that names no part or goes round', () => {
+        const r = parseOperation('draw_sketch', {
             subject: 'a cat',
             parts: [
                 { name: 'body', x: 20, y: 40, w: 50, h: 50 },
-                { name: 'tail', on: 'body', x: 70, y: 70, w: 25, h: 20 },
+                { name: 'tail', on: 'body', x: 75, y: 75, w: 25, h: 25 },
                 { name: 'ear', on: 'head', x: 0, y: 0, w: 10, h: 10 },
-                { name: 'cloud', x: 70, y: 0, w: 30, h: 20 },
+                { name: 'a', on: 'b', x: 0, y: 90, w: 5, h: 5 },
+                { name: 'b', on: 'a', x: 5, y: 90, w: 5, h: 5 },
             ],
             strokes: [
                 { part: 'body', d: 'M20 65 A25 25 0 1 1 70 65 A25 25 0 1 1 20 65 Z' },
-                { part: 'tail', d: 'M80 85 C90 80 95 75 90 70' },
+                { part: 'tail', d: 'M88 98 C95 90 98 85 95 80' },
                 { part: 'ear', d: 'M2 8 L5 2 L8 8' },
-                // Floats free and says so: no check.
-                { part: 'cloud', d: 'M75 15 Q85 0 95 15 Z' },
+                { part: 'a', d: 'M1 92 L4 92' },
+                { part: 'b', d: 'M6 92 L9 92' },
+            ],
+        });
+        expect(r.ok).toBe(false);
+        if (r.ok) return;
+        expect(r.errors[0]).toBe('input.parts[2].on: "head" is not one of the parts: body, tail, ear, a, b');
+        expect(r.errors).toHaveLength(1);
+
+        const fixed = parseOperation('draw_sketch', {
+            subject: 'a cat',
+            parts: [
+                { name: 'body', x: 20, y: 40, w: 50, h: 50 },
+                { name: 'tail', on: 'body', x: 75, y: 75, w: 25, h: 25 },
+                { name: 'a', on: 'b', x: 0, y: 90, w: 5, h: 5 },
+                { name: 'b', on: 'a', x: 5, y: 90, w: 5, h: 5 },
+            ],
+            strokes: [
+                { part: 'body', d: 'M20 65 A25 25 0 1 1 70 65 A25 25 0 1 1 20 65 Z' },
+                { part: 'tail', d: 'M88 98 C95 90 98 85 95 80' },
+                { part: 'a', d: 'M1 92 L4 92' },
+                { part: 'b', d: 'M6 92 L9 92' },
+            ],
+        });
+        expect(fixed.ok).toBe(false);
+        if (fixed.ok) return;
+        expect(fixed.errors).toEqual([
+            expect.stringMatching(/^input\.parts\[1\]: "tail" is on "body" but is far from it: the closest points are \(\d+, \d+\) and \(\d+, \d+\), \d+ units apart\./),
+            'input.parts[2].on: goes round in a loop (a → b → a); the main part must have no "on"',
+            'input.parts[3].on: goes round in a loop (b → a → b); the main part must have no "on"',
+        ]);
+    });
+
+    it('closes a small gap by moving the attached part and what hangs off it', () => {
+        // The head floats 6 units above the body; its ear and eye go wherever it goes.
+        const input = {
+            subject: 'a cat',
+            parts: [
+                { name: 'body', x: 30, y: 50, w: 40, h: 45 },
+                { name: 'head', on: 'body', x: 35, y: 10, w: 30, h: 34 },
+                { name: 'ear', on: 'head', x: 36, y: 6, w: 10, h: 18 },
+                { name: 'eye', x: 44, y: 24, w: 4, h: 4 },
+            ],
+            strokes: [
+                { part: 'body', d: 'M30 72 A20 22 0 1 1 70 72 A20 22 0 1 1 30 72 Z' },
+                { part: 'head', d: 'M35 29 A15 15 0 1 1 65 29 A15 15 0 1 1 35 29 Z' },
+                { part: 'ear', d: 'M38 22 L41 8 L46 16' },
+                { part: 'eye', d: 'M44 26 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0' },
             ],
         };
-        const r = parseOperation('draw_sketch', input);
-        expect(r).toMatchObject({ ok: false, errors: ['input.parts[2].on: "head" is not one of the parts: body, tail, ear, cloud'] });
+        expect(parseOperation('draw_sketch', input)).toEqual(expect.objectContaining({ ok: true }));
 
-        input.parts[2].on = 'body';
-        input.parts[2] = { ...input.parts[2], x: 30, y: 30 };
-        input.strokes[2].d = 'M32 42 L35 34 L38 42';
-        const r2 = parseOperation('draw_sketch', input);
-        expect(r2.ok).toBe(false);
-        if (r2.ok) return;
-        expect(r2.errors).toHaveLength(1);
-        expect(r2.errors[0]).toMatch(/^input\.parts\[1\]: "tail" is on "body" but does not touch it: the closest points are \(\d+, \d+\) and \(\d+, \d+\), \d+ units apart/);
+        const { moves, offsets } = joinOffsets(input);
+        expect(moves).toHaveLength(1);
+        expect(moves[0]).toMatchObject({ part: 'head', on: 'body' });
+        expect(Math.abs(moves[0].dx)).toBeLessThan(1);
+        expect(moves[0].dy).toBeCloseTo(7, 0);
+        expect(offsets.get('ear')).toEqual(offsets.get('head'));
+        expect(offsets.get('eye')).toEqual(offsets.get('head'));
+        expect(offsets.get('body')).toBeUndefined();
 
-        input.strokes[1].d = 'M68 75 C90 80 95 75 90 70';
-        expect(parseOperation('draw_sketch', input)).toMatchObject({ ok: true });
+        const { shapes, results } = executeToolCalls([], [{ name: 'draw_sketch', input }]);
+        expect(results[0].notes).toEqual([`moved "head" by (${moves[0].dx}, ${moves[0].dy}) to join "body"`]);
+        expect(formatToolResult(results[0])).toContain(`adjusted: moved "head" by (${moves[0].dx}, ${moves[0].dy}) to join "body"`);
+        // The head's lowest point (y 44 in the box, 2.4 board units per unit) now reaches the body's top (y 50).
+        const head = shapes[1] as Pen;
+        expect(Math.max(...head.points.map((p) => p[1]))).toBeGreaterThan(50 * 2.4 - 3);
     });
 
     it('places the drawing beside existing content', () => {

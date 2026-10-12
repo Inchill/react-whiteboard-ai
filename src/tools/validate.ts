@@ -1,4 +1,5 @@
 import type { DiagramEdge, DiagramInput, DiagramNode } from '../layout/diagram';
+import { JOIN, nearest } from '../sketch/join';
 import { parsePath, samplePath, type Pt } from '../sketch/path';
 import { SKETCH_DEFAULTS, type SketchInput, type SketchPart, type SketchStroke } from '../sketch/sketch';
 import type { Operation, OperationName, ShapeInput, ShapePatch } from '../types';
@@ -401,28 +402,26 @@ function checkInside(c: Checker, path: string, points: Pt[], part: SketchPart, e
 }
 
 /**
- * A part said to be on another (a tail on the body, an ear on the head) has to touch it: some point
- * of its strokes lies within a few units of that part's strokes. This catches a tail floating
- * beside the body, which the box check cannot see when the box itself was planned in the wrong place.
+ * A part said to be on another (a tail on the body, an ear on the head) has to be near it. A small
+ * gap is closed when drawing (see `joinParts`); a large one means the plan put the part in the wrong
+ * place, which the box check cannot see, so it goes back to the model. `on` must not go round in a loop.
  */
 function checkAttached(c: Checker, parts: Map<string, SketchPart>, index: Map<string, number>, drawn: Map<string, Pt[]>, extent: number) {
-    const reach = 0.04 * extent;
     parts.forEach((part) => {
         if (part.on === undefined) return;
-        const own = drawn.get(part.name) ?? [];
-        const base = drawn.get(part.on) ?? [];
-        let best = { d: Infinity, a: own[0], b: base[0] };
-        for (const a of own) {
-            for (const b of base) {
-                const d = Math.hypot(a.x - b.x, a.y - b.y);
-                if (d < best.d) best = { d, a, b };
-            }
+        const path = `input.parts[${index.get(part.name)}]`;
+        const chain = [part.name];
+        for (let p = parts.get(part.on); p; p = p.on === undefined ? undefined : parts.get(p.on)) {
+            const looped = chain.includes(p.name);
+            chain.push(p.name);
+            if (looped) return c.fail(`${path}.on`, `goes round in a loop (${chain.join(' → ')}); the main part must have no "on"`);
         }
-        if (!own.length || !base.length || best.d <= reach) return;
+        const gap = nearest(drawn.get(part.name) ?? [], drawn.get(part.on) ?? []);
+        if (!gap || gap.d <= JOIN.maxGap * extent) return;
         c.fail(
-            `input.parts[${index.get(part.name)}]`,
-            `"${part.name}" is on "${part.on}" but does not touch it: the closest points are (${r0(best.a.x)}, ${r0(best.a.y)}) and ` +
-                `(${r0(best.b.x)}, ${r0(best.b.y)}), ${r0(best.d)} units apart. Start "${part.name}" on the outline of "${part.on}".`,
+            path,
+            `"${part.name}" is on "${part.on}" but is far from it: the closest points are (${r0(gap.from.x)}, ${r0(gap.from.y)}) and ` +
+                `(${r0(gap.to.x)}, ${r0(gap.to.y)}), ${r0(gap.d)} units apart. Plan "${part.name}" where it joins "${part.on}" and start it on that outline.`,
         );
     });
 }

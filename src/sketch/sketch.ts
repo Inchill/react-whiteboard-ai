@@ -1,5 +1,6 @@
 import { createId as defaultCreateId } from '../geometry';
 import { INK, type Shape } from '../types';
+import { joinOffsets } from './join';
 import { parsePath, samplePath, type Pt } from './path';
 
 /**
@@ -117,7 +118,10 @@ export function humanize(points: Pt[], closed: boolean, rand: () => number): [nu
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
-/** Turn a sketch into pen strokes on the board. Throws PathSyntaxError for invalid path data. */
+/**
+ * Turn a sketch into pen strokes on the board. Throws PathSyntaxError for invalid path data.
+ * Parts drawn `on` another are moved to touch it when the gap is small (see `joinParts`).
+ */
 export function sketchToShapes(input: SketchInput, options: SketchOptions = {}): Shape[] {
     const createId = options.createId ?? defaultCreateId;
     const boxW = input.width ?? SKETCH_DEFAULTS.box;
@@ -126,12 +130,14 @@ export function sketchToShapes(input: SketchInput, options: SketchOptions = {}):
     const ox = input.x ?? options.origin?.x ?? 0;
     const oy = input.y ?? options.origin?.y ?? 0;
     const rand = random(options.seed ?? hash(input.strokes.map((s) => s.d).join('|')));
+    const { offsets } = joinOffsets(input);
 
     const shapes: Shape[] = [];
     for (const stroke of input.strokes) {
         for (const sub of parsePath(stroke.d)) {
             // Sample in board units so the point spacing does not depend on the sketch's scale.
-            const scaled = { ...sub, segments: sub.segments.map((seg) => scaleSegment(seg, k, ox, oy)) };
+            const off = (stroke.part !== undefined && offsets.get(stroke.part)) || { x: 0, y: 0 };
+            const scaled = { ...sub, segments: sub.segments.map((seg) => scaleSegment(seg, k, ox + off.x * k, oy + off.y * k)) };
             const points = samplePath(scaled, SKETCH_DEFAULTS.step);
             if (!points.length) continue;
             shapes.push({
