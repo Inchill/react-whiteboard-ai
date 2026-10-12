@@ -31,7 +31,11 @@ export function App() {
             .catch(() => setModel(null));
     }, []);
 
-    useEffect(() => logEnd.current?.scrollIntoView({ block: 'end' }), [log]);
+    // Braces matter: newer browsers return a Promise from scrollIntoView, and React treats
+    // any non-function return value of an effect as a mistake.
+    useEffect(() => {
+        logEnd.current?.scrollIntoView({ block: 'end' });
+    }, [log]);
 
     const push = (entry: LogEntry) => setLog((l) => [...l, entry]);
 
