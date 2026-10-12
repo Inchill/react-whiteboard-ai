@@ -1,37 +1,80 @@
 # react-whiteboard-ai
 
-Let an LLM read and edit an [`@inchill/react-whiteboard`](https://github.com/Inchill/react-whiteboard) board.
+Let an LLM read and draw on an [`@inchill/react-whiteboard`](https://github.com/Inchill/react-whiteboard) board: flowcharts and architecture diagrams with automatic layout, hand-drawn line sketches, and plain shape edits.
 
 The package gives you the pieces between the board and the model, and nothing else:
 
-- **Context** — `describeBoard()` turns the board into compact JSON the model can reason about.
-- **Tools** — `TOOL_DEFINITIONS` (JSON Schema), ready for Anthropic or OpenAI-style tool calling.
-- **Validation** — every tool call is checked; errors come back with paths so the model can fix them.
-- **Execution** — one model turn becomes **one undo step**, so the user can take it all back with Ctrl+Z.
+- **Context**: `describeBoard()` turns the board into compact JSON the model can reason about.
+- **Tools**: five tools as JSON Schema, ready for Anthropic or OpenAI-style tool calling, plus a system prompt that explains them.
+- **Validation**: every tool call is checked. Errors come back with paths, so the model can fix them in the next round.
+- **Execution**: one model turn becomes **one undo step**, so the user can take it all back with Ctrl+Z.
 
-It never calls a model and never sees an API key. You send the request from your own backend, with any provider.
+It never calls a model and never sees an API key. You send the request from your own code, with any provider. The core whiteboard stays as it is: no new dependencies and no AI code in it.
 
-> Status: early (0.1). Hand-drawn sketching (`draw_sketch`) and annotations are next.
+> Status: early (0.1). The API may still change.
 
-## Local preview
+## Tools
 
-```bash
-pnpm install
-pnpm dev
+| Tool | Does |
+| --- | --- |
+| `add_diagram` | Boxes joined by arrows: flowcharts, architecture and layer diagrams, org charts, trees, state machines, pipelines. The model gives only nodes, layers and edges. Layout, box sizes, colors and arrow routing are automatic |
+| `draw_sketch` | Line drawings with curves: characters, animals, avatars, plants, objects. The model writes SVG paths, which become hand-drawn pressure pen strokes |
+| `add_shapes` | Add rectangles, ellipses, triangles, lines, arrows and text |
+| `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle or edit text by id |
+| `delete_shapes` | Delete by id |
+
+Anything the model draws without coordinates is placed to the right of what is already on the board.
+
+### `add_diagram`
+
+```json
+{
+    "direction": "down",
+    "nodes": [
+        { "id": "web", "label": "Web", "layer": "客户端" },
+        { "id": "app", "label": "App", "layer": "客户端" },
+        { "id": "gw", "label": "API 网关", "layer": "接入层" },
+        { "id": "order", "label": "订单服务", "layer": "服务层" },
+        { "id": "user", "label": "用户服务", "layer": "服务层" },
+        { "id": "db", "label": "MySQL", "layer": "数据层" }
+    ],
+    "edges": [
+        { "from": "web", "to": "gw" },
+        { "from": "app", "to": "gw" },
+        { "from": "gw", "to": "order" },
+        { "from": "gw", "to": "user" },
+        { "from": "order", "to": "db" },
+        { "from": "user", "to": "db", "style": "dashed" }
+    ]
+}
 ```
 
-The demo page sends your instructions, or one of the example prompts, to a model and shows each tool call it makes, any validation errors sent back to it, and the result on the board as a single undo step.
+- **Rows**: with `layer` names, each layer is a row with a labeled band, in order of first use. Without them, rows follow the arrows. `direction: "right"` lays it out left to right, for pipelines and timelines.
+- **Arrows**: arrows that skip rows are routed around boxes. Many-to-many links between two rows share a bus. Links within a row and links pointing back up (loops, retries) get their own routes.
+- **Shapes**: `shape: "ellipse"` is for the start and end of a flow. Edge labels such as "是" / "否" sit on the arrow.
 
-To connect a model, click the connection button in the panel header (“连接模型”), pick DeepSeek or Claude and paste an API key. It is kept in this tab only (or in the browser if you tick *Remember*) and sent to the local dev server, which forwards the request; it is never logged or stored there. Replies stream in: you see the model's words as it writes them and how many shapes it has written so far; the shapes land on the board together when the round is complete, as one undo step. You can also put `ANTHROPIC_API_KEY` or `DEEPSEEK_API_KEY` in `.env.local` instead (see `.env.example`); a key set on the page wins.
+The tool result maps each node id to the box drawn for it (`nodes: { gw: "s12", … }`), so the model can edit the diagram in a later turn. Limits: 60 nodes, 120 edges.
 
-## Deploy the demo
+### `draw_sketch`
 
-```bash
-pnpm build:demo     # static files in dist-demo
-pnpm preview:demo   # check the build locally
+```json
+{
+    "width": 100,
+    "height": 100,
+    "size": 240,
+    "strokes": [
+        { "d": "M50 12 C78 12 88 34 88 56 C88 80 70 92 50 92 C30 92 12 80 12 56 C12 34 22 12 50 12 Z", "width": 4 },
+        { "d": "M36 50 A4 4 0 1 1 36.1 50 M64 50 A4 4 0 1 1 64.1 50" },
+        { "d": "M38 70 Q50 80 62 70" }
+    ]
+}
 ```
 
-`dist-demo` works on GitHub Pages or any static host, at any sub-path. With no server there, the page calls the provider straight from the visitor's browser with the key they enter, which stays in their browser. Claude allows this; if a provider refuses calls from web pages (CORS), visitors can enter a proxy of their own as the endpoint in the model settings.
+- **Paths**: paths are written in their own coordinate box (default 100 × 100, y down) and scaled so the longest side is `size` on the board. Every SVG path command works: `M L H V C S Q T A Z`, absolute and relative.
+- **Strokes**: each `M` starts a new pen stroke. The stroke gets a natural hand-drawn line: it is thinner at the ends, with a slight wobble, and closed loops overlap a little where they meet. The variation comes from a seed derived from the paths, so the same input always draws the same way.
+- **Result**: the result is ordinary pen shapes, so users can move, recolor or erase them like their own strokes.
+
+It draws lines only, with no fills. How good the picture is depends on the model; reasoning models (or the demo's deep-thinking switch) draw noticeably better.
 
 ## Install
 
@@ -39,34 +82,57 @@ pnpm preview:demo   # check the build locally
 pnpm add @inchill/react-whiteboard-ai @inchill/react-whiteboard
 ```
 
+Requires React 18 or later and `@inchill/react-whiteboard` 1.0 or later.
+
 ## Use
+
+A model turn goes like this:
+
+1. Send the board (`describe()`), the tools and your prompt to the model.
+2. Run its tool calls with `execute()`. They land on the board as one undo step.
+3. Send each result back as a `tool_result`. Invalid calls come back with their errors, and the model usually fixes them in the next round.
+4. Stop when the model answers without calling a tool.
 
 In the browser:
 
 ```tsx
 import { useRef } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
-import { useWhiteboardAI } from '@inchill/react-whiteboard-ai';
+import { formatToolResult, useWhiteboardAI } from '@inchill/react-whiteboard-ai';
 
 export function Board() {
     const board = useRef<WhiteboardHandle>(null);
     const ai = useWhiteboardAI(board);
 
     async function ask(prompt: string) {
-        const res = await fetch('/api/whiteboard-ai', {
-            method: 'POST',
-            body: JSON.stringify({ prompt, board: ai.describe() }),
-        });
-        const { toolCalls } = await res.json(); // [{ id, name, input }]
-        const results = ai.execute(toolCalls);   // applied as one undo step
-        // Optionally send `results` back to the model for another round.
+        const messages: unknown[] = [{ role: 'user', content: `Board:\n${JSON.stringify(ai.describe())}\n\n${prompt}` }];
+        for (let round = 0; round < 4; round++) {
+            const res = await fetch('/api/whiteboard-ai', { method: 'POST', body: JSON.stringify({ messages }) });
+            const message = await res.json(); // Anthropic Messages API response
+            const calls = message.content.filter((b) => b.type === 'tool_use');
+            if (!calls.length) break;
+
+            const results = ai.execute(calls.map((b) => ({ id: b.id, name: b.name, input: b.input })));
+            messages.push(
+                { role: 'assistant', content: message.content },
+                {
+                    role: 'user',
+                    content: results.map((r) => ({
+                        type: 'tool_result',
+                        tool_use_id: r.id,
+                        content: formatToolResult(r),
+                        is_error: !r.ok,
+                    })),
+                },
+            );
+        }
     }
 
     return <Whiteboard ref={board} />;
 }
 ```
 
-On your server (Anthropic SDK shown; any provider works):
+On your server (Anthropic SDK shown):
 
 ```ts
 import Anthropic from '@anthropic-ai/sdk';
@@ -74,32 +140,25 @@ import { buildSystemPrompt, toAnthropicTools } from '@inchill/react-whiteboard-a
 
 const client = new Anthropic();
 
-export async function handle({ prompt, board }) {
-    const message = await client.messages.create({
-        model: 'claude-opus-5-5',
-        max_tokens: 4096,
+export async function handle({ messages }) {
+    return client.messages.create({
+        model: 'claude-sonnet-5-5',
+        max_tokens: 16000,
         system: buildSystemPrompt(),
         tools: toAnthropicTools(),
-        messages: [{ role: 'user', content: `Board:\n${JSON.stringify(board)}\n\n${prompt}` }],
+        messages,
     });
-    const toolCalls = message.content
-        .filter((b) => b.type === 'tool_use')
-        .map((b) => ({ id: b.id, name: b.name, input: b.input }));
-    return { toolCalls };
 }
 ```
 
-For OpenAI-compatible APIs use `toOpenAITools()` and parse each call's `function.arguments` as JSON before passing it as `input`.
+**Other providers**
 
-## Tools
+- **DeepSeek** has an Anthropic-compatible endpoint. Use the same code with `baseURL: 'https://api.deepseek.com/anthropic'` and a DeepSeek key and model.
+- **OpenAI-compatible APIs** use `toOpenAITools()`. Parse each call's `function.arguments` as JSON before passing it as `input`.
 
-| Tool | Does |
-| --- | --- |
-| `add_diagram` | Boxes joined by arrows (flowcharts, architecture, org charts, trees, pipelines). The model gives nodes, layers and edges; layout, sizes, colors and arrow routing are automatic |
-| `draw_sketch` | Line drawings with curves (characters, animals, avatars, objects). The model writes SVG paths; they become hand-drawn pressure pen strokes |
-| `add_shapes` | Add rectangles, ellipses, triangles, lines, arrows and text |
-| `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle or edit text by id |
-| `delete_shapes` | Delete by id |
+Give the model room to work: a diagram or sketch is a large tool input, and reasoning models also spend tokens on thinking. A `max_tokens` around 16000 is safe.
+
+Without React, `createWhiteboardAgent(ref)` returns the same `{ describe, execute }`.
 
 ## API
 
@@ -108,14 +167,127 @@ For OpenAI-compatible APIs use `toOpenAITools()` and parse each call's `function
 | `useWhiteboardAI(ref)` | React hook → `{ describe, execute }` |
 | `createWhiteboardAgent(ref \| () => handle)` | Same, without React |
 | `describeBoard(shapes, { maxShapes })` | Board → JSON for the model |
-| `executeToolCalls(shapes, calls)` | Pure: validate + apply, returns new shapes and per-call results |
-| `applyOperations(shapes, ops)` | Pure: apply already-validated operations |
-| `layoutDiagram(input)` | Pure: lay out a node-and-arrow diagram as board shapes, without a model |
-| `sketchToShapes(input)` | Pure: SVG paths → hand-drawn pen strokes, without a model |
-| `parseOperation(name, input)` | Validate one tool call |
-| `formatToolResult(result)` | Short text to return to the model as the tool result |
+| `buildSystemPrompt({ extra })` | System prompt that explains the board and the tools |
 | `TOOL_DEFINITIONS`, `toAnthropicTools()`, `toOpenAITools()` | Tool schemas |
-| `buildSystemPrompt({ extra })` | System prompt that explains the board |
+| `executeToolCalls(shapes, calls)` | Pure: validate and apply, returns new shapes and per-call results |
+| `formatToolResult(result)` | Short text to send back to the model as the tool result |
+| `parseOperation(name, input)` | Validate one tool call |
+| `applyOperations(shapes, ops)` | Pure: apply already validated operations |
+| `layoutDiagram(input, { origin })` | Pure: lay out a node-and-arrow diagram as board shapes, no model needed |
+| `sketchToShapes(input, { origin, seed })` | Pure: SVG paths → hand-drawn pen strokes, no model needed |
+| `parsePath(d)`, `samplePath(subpath, step)` | SVG path data → subpaths → evenly spaced points |
+| `LIMITS`, `DEFAULTS`, `DIAGRAM_STYLE`, `SKETCH_DEFAULTS` | Limits and default styles |
+
+`layoutDiagram` and `sketchToShapes` are useful on their own, for example to turn data or an SVG icon into editable board shapes:
+
+```ts
+const { shapes } = layoutDiagram({ nodes, edges }, { origin: { x: 0, y: 0 } });
+board.current?.setShapes([...board.current.getShapes(), ...shapes]);
+```
+
+## Demo
+
+```bash
+pnpm install
+pnpm dev
+```
+
+The demo is a whiteboard with a chat panel. It shows:
+
+- **Example prompts**, grouped by what the tools do well: 手绘 (sketches), 结构图 (diagrams), 布局 (layouts) and 编辑 (edits on what is already there). Clicking one sends it to the model.
+- **Streaming replies**: you see the model's text as it writes it, its thinking (collapsible), and how many shapes it has written so far. When a round is complete, its shapes land on the board as one undo step. Each tool call is listed with a short summary, along with any validation errors sent back to the model.
+- **Deep thinking**: a switch that turns the model's reasoning on or off. Off is faster. On draws better sketches and more complex diagrams.
+- **Stop**: cancels the current request.
+
+### Connect a model
+
+Click **连接模型** in the panel header and choose a provider:
+
+| Provider | Endpoint | Default model |
+| --- | --- | --- |
+| DeepSeek | `https://api.deepseek.com/anthropic` | `deepseek-flash` |
+| Claude | `https://api.anthropic.com` | `claude-sonnet-5-5` |
+
+Enter an API key and, optionally, a model and an endpoint. The endpoint can be any Anthropic-compatible gateway or your own proxy. The key is kept in this tab only, or in the browser if you tick *在这个浏览器里记住*.
+
+In `pnpm dev`, requests go through a small proxy in the Vite dev server, which forwards them and streams the reply back. The proxy never logs or stores keys. It prints one line per request with timing and event counts, never content.
+
+You can also put a key in `.env.local` (copy `.env.example`), so you do not have to enter one on the page. A key entered on the page takes precedence.
+
+| Variable | |
+| --- | --- |
+| `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` | DeepSeek key and optional model |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL` | Claude key, optional model and gateway |
+| `AI_PROVIDER` | `deepseek` or `anthropic`, when both keys are set |
+| `AI_THINKING` | `on` to think by default. The page switch overrides it |
+| `AI_MAX_TOKENS` | Default 16000. Thinking counts toward it |
+
+Variables exported in your shell take precedence over `.env.local`.
+
+### Deploy to GitHub Pages
+
+```bash
+pnpm build:demo     # static files in dist-demo
+pnpm preview:demo   # check the build locally
+```
+
+`dist-demo` works on any static host, at any sub-path. A static host has no server to proxy through, so the deployed page calls the provider straight from the visitor's browser with the key they enter, and the key never leaves their browser.
+
+- **Claude** allows browser calls (the page sends the required opt-in header).
+- **Other providers**: if one refuses calls from web pages (a CORS error), the page says so. Visitors can then enter a proxy of their own as the endpoint.
+
+To publish from GitHub Actions:
+
+1. Add `.github/workflows/deploy.yml`:
+
+    ```yaml
+    name: Deploy demo
+    on:
+      push:
+        branches: [main]
+      workflow_dispatch:
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    jobs:
+      deploy:
+        runs-on: ubuntu-latest
+        environment:
+          name: github-pages
+          url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+          - uses: actions/checkout@v4
+          - uses: pnpm/action-setup@v4
+          - uses: actions/setup-node@v4
+            with:
+              node-version: 24
+              cache: pnpm
+          - run: pnpm install --frozen-lockfile
+          - run: pnpm build:demo
+          - uses: actions/upload-pages-artifact@v3
+            with:
+              path: dist-demo
+          - id: deployment
+            uses: actions/deploy-pages@v4
+    ```
+
+2. In the repository settings, under **Pages → Build and deployment → Source**, choose **GitHub Actions**.
+
+## Development
+
+Requires Node 24 or later and pnpm 10.
+
+| Script | |
+| --- | --- |
+| `pnpm dev` | Demo with the local model proxy |
+| `pnpm build` | Library build into `dist` (ES module and type declarations) |
+| `pnpm build:demo` / `pnpm preview:demo` | Static demo into `dist-demo` / preview it |
+| `pnpm test` / `pnpm test:watch` | Vitest |
+| `pnpm lint`, `pnpm typecheck` | ESLint, TypeScript |
 
 ## License
 
