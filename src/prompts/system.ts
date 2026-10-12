@@ -1,3 +1,5 @@
+import { SKETCH_EXAMPLE } from './sketchExample';
+
 export type SystemPromptOptions = {
     /** Extra instructions appended at the end, e.g. the product's tone or domain. */
     extra?: string;
@@ -9,7 +11,8 @@ export type SystemPromptOptions = {
  */
 export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
     const lines = [
-        'You can see and edit a whiteboard through tools.',
+        'You can see and edit a whiteboard through tools. Write everything the user reads (replies and text on the board) in the ' +
+            'language the user wrote in.',
         '',
         'The board:',
         '- An infinite canvas in world units. x grows to the right, y grows downward.',
@@ -28,10 +31,21 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
             '2×2 matrices, tables and kanban boards, UI wireframes, Venn diagrams (overlapping translucent ellipses), simple bar charts, ' +
             'geometry and physics sketches, and notes or highlights on existing content. Simple icon-like pictures (a smiley, a house, a tree ' +
             'of stacked triangles, a traffic light) work too.',
-        'For pictures with curves (characters, animals, avatars, plants, objects, doodles), use draw_sketch rather than composing ellipses: ' +
-            'write SVG paths in its 100 × 100 box, outline first and then features, 5–40 strokes, each one continuous line, with C, Q and A ' +
-            'for curves and color on the strokes. Keep it simple and cute, like a quick marker drawing. Draw original designs; do not copy ' +
-            'copyrighted characters or logos, and offer an original one instead if asked.',
+        'For pictures with curves (characters, animals, avatars, plants, objects, doodles), use draw_sketch rather than composing ellipses. ' +
+            'Draw original designs; do not copy copyrighted characters or logos, and offer an original one instead if asked.',
+        '',
+        'Sketching with draw_sketch:',
+        '- Plan, then draw. First the subject: what it is, the view and the pose. Then a box for each part in the 100 × 100 drawing box, ' +
+            'as it will look when finished. Only then the strokes, each inside its own part\'s box.',
+        '- Lay out the big masses first. A whole figure fills most of the box. For a body with a head, give each its own box: the head ' +
+            'is about a third of the figure\'s height for a cute style, and overlaps the body where they join. A face alone fills the box.',
+        '- Attached parts (ears, arms, legs, tail, beak, handle) overlap the edge of the part they grow from, on the correct side for the ' +
+            'pose. Details (eyes, nose, mouth, patterns) sit well inside their part.',
+        '- Strokes: one continuous line per M, 5–40 strokes in all. Use A for circles and round ends, C and Q for smooth curves. ' +
+            'Where two outlines meet, end one at the other instead of drawing through it. Outlines width 4, details 2–3.',
+        '- Keep it simple and cute, like a quick marker drawing, with color on a few strokes.',
+        '- Example call for "a little bird on a branch":',
+        JSON.stringify(SKETCH_EXAMPLE),
         '',
         'Layout:',
         '- Text width is about 1 × fontSize per CJK character and 0.6 × fontSize per Latin character; each line is 1.25 × fontSize tall. ' +
@@ -62,7 +76,7 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         '- Keep sizes consistent with what is already on the board. Typical text is 20 units; a typical box is 120–240 units wide.',
         '- Prefer one tool call with many shapes over many calls with one shape each.',
         '- If a tool result reports errors, fix only the failed items and try again.',
-        '- When you are done, reply with one short sentence about what you changed, in the language the user wrote in.',
+        '- When you are done, reply with one short sentence about what you changed.',
     ];
     if (options.extra) lines.push('', options.extra);
     return lines.join('\n');
