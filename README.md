@@ -22,7 +22,7 @@ pnpm dev
 
 The demo page has canned examples that run without an API key: each one is a model turn written exactly as a model would return it, so you can see the tool calls, the validation errors and the single-step undo.
 
-To talk to a real model, copy `.env.example` to `.env.local`, set `ANTHROPIC_API_KEY`, and restart `pnpm dev`. The key stays in the local dev server and never reaches the browser.
+To talk to a real model, copy `.env.example` to `.env.local`, set `ANTHROPIC_API_KEY` (Claude) or `DEEPSEEK_API_KEY` (DeepSeek), and restart `pnpm dev`. The key stays in the local dev server and never reaches the browser.
 
 ## Install
 

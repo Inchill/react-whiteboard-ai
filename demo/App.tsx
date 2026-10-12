@@ -121,7 +121,7 @@ export function App() {
                 <form onSubmit={ask} className="demo-ask">
                     {model === null && (
                         <p className="demo-muted">
-                            想用自然语言指挥？在项目根目录的 <code>.env.local</code> 里写入 <code>ANTHROPIC_API_KEY=...</code>，然后重启 <code>pnpm dev</code>。
+                            想用自然语言指挥？在项目根目录的 <code>.env.local</code> 里写入 <code>ANTHROPIC_API_KEY</code> 或 <code>DEEPSEEK_API_KEY</code>，然后重启 <code>pnpm dev</code>。
                         </p>
                     )}
                     {model && <p className="demo-muted">模型：{model}</p>}
