@@ -91,7 +91,7 @@ describe('layoutDiagram', () => {
         expect(arrows.map((a) => a.x2).sort((a, b) => a - b)).toEqual(centers.sort((a, b) => a - b));
     });
 
-    it('ranks by the arrows when there are no layers, and loops a cycle back on the side', () => {
+    it('ranks by the arrows when there are no layers, and loops a long cycle around the side', () => {
         const { shapes, box } = boxesOf({
             nodes: [
                 { id: 'in', label: '输入' },
@@ -106,9 +106,83 @@ describe('layoutDiagram', () => {
         });
         expect(box('in').y).toBeLessThan(box('check').y);
         expect(box('check').y).toBeLessThan(box('retry').y);
-        const dashed = shapes.filter((s) => (s.type === 'line' || s.type === 'arrow') && s.strokeStyle === 'dashed');
-        expect(dashed).toHaveLength(3);
+        const back = shapes.filter((s): s is Linear => (s.type === 'line' || s.type === 'arrow') && s.strokeStyle === 'dashed');
+        expect(back).toHaveLength(3);
+        // Enters the box it returns to from the right, pointing left.
+        const head = back.find((s) => s.type === 'arrow')!;
+        expect(head.x2).toBeCloseTo(box('in').x + box('in').w + 4);
+        expect(head.x2).toBeLessThan(head.x1);
         expect(shapes.some((s) => s.type === 'text' && s.text === '失败')).toBe(true);
+    });
+
+    it('routes a short cycle back up through the gap as a dashed arrow', () => {
+        const { shapes, box } = boxesOf({
+            nodes: [
+                { id: 'a', label: '订单', layer: 'svc' },
+                { id: 'b', label: '支付', layer: 'svc' },
+                { id: 'mq', label: '消息队列', layer: 'mw' },
+            ],
+            edges: [
+                { from: 'b', to: 'mq' },
+                { from: 'mq', to: 'a', label: '通知' },
+            ],
+        });
+        const back = shapes.filter((s): s is Linear => s.type === 'arrow' && s.strokeStyle === 'dashed');
+        expect(back).toHaveLength(1);
+        // Points up and lands just under the box it returns to, never crossing the row sideways.
+        expect(back[0].y2).toBeLessThan(back[0].y1);
+        expect(back[0].y2).toBeCloseTo(box('a').y + box('a').h + 4);
+        expect(back[0].x2).toBeGreaterThan(box('a').x);
+        expect(back[0].x2).toBeLessThan(box('a').x + box('a').w);
+    });
+
+    it('keeps links that skip a layer out of the boxes in between', () => {
+        const { shapes, nodes, box } = boxesOf({
+            nodes: [
+                { id: 'svc', label: '服务', layer: 'a' },
+                { id: 'mq', label: '消息队列', layer: 'b' },
+                { id: 'cache', label: '缓存', layer: 'b' },
+                { id: 'db', label: '数据库', layer: 'c' },
+            ],
+            edges: [
+                { from: 'svc', to: 'db' },
+                { from: 'svc', to: 'cache' },
+            ],
+        });
+        const boxes = Object.keys(nodes).map(box);
+        const legs = shapes.filter((s): s is Linear => s.type === 'line' || s.type === 'arrow');
+        for (const leg of legs) {
+            for (const b of boxes) {
+                // Sample along each leg; no point may sit strictly inside a box.
+                for (let t = 0; t <= 1; t += 0.05) {
+                    const x = leg.x1 + (leg.x2 - leg.x1) * t;
+                    const y = leg.y1 + (leg.y2 - leg.y1) * t;
+                    expect(x > b.x + 1 && x < b.x + b.w - 1 && y > b.y + 1 && y < b.y + b.h - 1).toBe(false);
+                }
+            }
+        }
+        // It arrives at the database straight from above, inside the box's width.
+        const db = box('db');
+        const into = legs.filter((l) => l.type === 'arrow' && Math.abs(l.y2 - (db.y - 4)) < 0.01);
+        expect(into).toHaveLength(1);
+        expect(into[0].x1).toBe(into[0].x2);
+        expect(into[0].x2).toBeGreaterThan(db.x);
+        expect(into[0].x2).toBeLessThan(db.x + db.w);
+    });
+
+    it('draws same-layer links around boxes in between, and keeps a pair apart', () => {
+        const { shapes, box } = boxesOf({
+            nodes: ['a', 'b', 'c'].map((id) => ({ id, label: id, layer: 'one' })),
+            edges: [
+                { from: 'a', to: 'c' },
+                { from: 'a', to: 'b', label: '请求' },
+                { from: 'b', to: 'a', label: '回复' },
+            ],
+        });
+        const ys = shapes.filter((s): s is Linear => s.type === 'line' && s.y1 === s.y2).map((s) => s.y1);
+        // Three detours, each on its own height above the row.
+        expect(new Set(ys).size).toBe(3);
+        for (const y of ys) expect(y).toBeLessThan(box('a').y);
     });
 
     it('lays layers out left to right with direction "right"', () => {
