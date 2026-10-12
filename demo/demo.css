@@ -540,13 +540,22 @@ button:disabled {
     }
 }
 
-/* Still being written: a dashed marker until the parameters are complete. */
+/* Still being written: a light accent marker and a spinner until the parameters are complete. */
 .op-pending {
-    --mark: var(--muted);
-    border-left-style: dashed;
+    --mark: color-mix(in srgb, var(--blue) 40%, var(--surface));
+    background: var(--surface-sunk);
 }
 
-.op-pending .op-title span,
+.op-pending .op-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.op-pending .op-detail {
+    padding-left: 20px;
+}
+
 .say-live::after {
     animation: blink 1s steps(2, start) infinite;
 }
@@ -631,7 +640,6 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
     .spinner,
-    .op-pending .op-title span,
     .say-live::after {
         animation: none;
     }

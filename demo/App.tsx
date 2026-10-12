@@ -452,8 +452,8 @@ function LiveReply({ message, thinkingSeconds, thoughtOpen, onToggleThought }: L
                     return (
                         <div key={i} className="op op-pending" role="status">
                             <p className="op-title">
-                                {label}
-                                <span aria-hidden>…</span>
+                                <span className="spinner" aria-hidden />
+                                <span className="trim">{label}</span>
                             </p>
                             <p className="op-detail">{n ? `已写好 ${n} ${unit}，写完后一起画到白板上` : '正在写参数'}</p>
                         </div>
