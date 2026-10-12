@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { EXAMPLES, type Example } from './examples';
-import { Settings } from './Settings';
+import { SettingsPanel } from './SettingsPanel';
 import { clearSettings, loadSettings, saveSettings, settingsHeaders, type AISettings } from './settings';
 
 type LogEntry =
@@ -132,7 +132,7 @@ export function App() {
                     <div ref={logEnd} />
                 </section>
 
-                <Settings
+                <SettingsPanel
                     settings={settings}
                     serverModel={model}
                     onSave={(s) => {

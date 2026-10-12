@@ -9,7 +9,7 @@ type Props = {
     onClear: () => void;
 };
 
-export function Settings({ settings, serverModel, onSave, onClear }: Props) {
+export function SettingsPanel({ settings, serverModel, onSave, onClear }: Props) {
     const [editing, setEditing] = useState(!settings && !serverModel);
     const [provider, setProvider] = useState<Provider>(settings?.provider ?? 'deepseek');
     const [key, setKey] = useState('');
