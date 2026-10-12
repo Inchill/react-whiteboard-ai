@@ -18,7 +18,7 @@ It never calls a model and never sees an API key. You send the request from your
 | Tool | Does |
 | --- | --- |
 | `add_diagram` | Boxes joined by arrows: flowcharts, architecture and layer diagrams, org charts, trees, state machines, pipelines. The model gives only nodes, layers and edges. Layout, box sizes, colors and arrow routing are automatic |
-| `draw_sketch` | Line drawings with curves: characters, animals, avatars, plants, objects. The model writes SVG paths, which become hand-drawn pressure pen strokes |
+| `draw_sketch` | Line drawings with curves: characters, animals, avatars, plants, objects. The model plans the parts and gives points or SVG paths, which become hand-drawn pressure pen strokes |
 | `add_shapes` | Add rectangles, ellipses, triangles, lines, arrows and text |
 | `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle or edit text by id |
 | `delete_shapes` | Delete by id |
@@ -66,17 +66,23 @@ The tool result maps each node id to the box drawn for it (`nodes: { gw: "s12", 
         { "name": "mouth", "x": 36, "y": 66, "w": 28, "h": 12 }
     ],
     "strokes": [
-        { "part": "face", "d": "M50 12 C78 12 88 34 88 56 C88 80 70 92 50 92 C30 92 12 80 12 56 C12 34 22 12 50 12 Z", "width": 4 },
+        {
+            "part": "face",
+            "points": [[50, 12], [76, 20], [88, 46], [82, 76], [62, 91], [38, 91], [18, 76], [12, 46], [24, 20]],
+            "closed": true,
+            "width": 4
+        },
         { "part": "eyes", "d": "M36 50 A4 4 0 1 1 36.1 50 M64 50 A4 4 0 1 1 64.1 50" },
-        { "part": "mouth", "d": "M38 70 Q50 80 62 70" }
+        { "part": "mouth", "points": [[38, 70], [50, 77], [62, 70]] }
     ],
     "size": 240
 }
 ```
 
 - **Plan first**: the model states the `subject` (what it is, the view, the pose), then a box for each part, then the strokes, each tagged with its part. A part that grows from another names it in `on` (a tail `on` the body, an ear `on` the head). The tool checks that every stroke stays near its part's box, that every part gets drawn, and that each part with `on` is near the part it grows from. A small gap, such as a head drawn a few units above the body, is closed while drawing: the part moves to touch, taking along what is on it or inside it (ears, eyes), and the tool result tells the model what moved. When they disagree badly, for example a tail drawn across the face or far from the body, the call fails with the exact stroke and position, and the model fixes it in the next round. Planning the layout before writing coordinates matters most for models without a reasoning mode.
-- **Paths**: paths are written in their own coordinate box (default 100 × 100, y down) and scaled so the longest side is `size` on the board. Every SVG path command works: `M L H V C S Q T A Z`, absolute and relative.
-- **Strokes**: each `M` starts a new pen stroke. The stroke gets a natural hand-drawn line: it is thinner at the ends, with a slight wobble, and closed loops overlap a little where they meet. The variation comes from a seed derived from the paths, so the same input always draws the same way.
+- **Lines**: a stroke is either `points` the line passes through or SVG path data in `d`. With points, the line runs smoothly through each one (centripetal Catmull-Rom, so it never loops or overshoots), and `closed: true` makes a loop. Models place points along an outline far more reliably than they write Bézier control points, so points suit bodies, heads, tails and leaves; `d` suits circles, straight lines and exact shapes, and every SVG path command works: `M L H V C S Q T A Z`, absolute and relative.
+- **Coordinates**: everything is written in the drawing's own box (default 100 × 100, y down) and scaled so the longest side is `size` on the board.
+- **Strokes**: each line (each `M` in `d`) becomes one pen stroke. The stroke gets a natural hand-drawn line: it is thinner at the ends, with a slight wobble, and closed loops overlap a little where they meet. The variation comes from a seed derived from the paths, so the same input always draws the same way.
 - **Result**: the result is ordinary pen shapes, so users can move, recolor or erase them like their own strokes.
 
 It draws lines only, with no fills. The system prompt teaches a drawing method with a worked example, but how good the picture is still depends on the model; reasoning models (or the demo's deep-thinking switch) draw noticeably better. `sketchToShapes` on its own does not need `subject` or `parts`.
@@ -179,7 +185,8 @@ Without React, `createWhiteboardAgent(ref)` returns the same `{ describe, execut
 | `parseOperation(name, input)` | Validate one tool call |
 | `applyOperations(shapes, ops)` | Pure: apply already validated operations |
 | `layoutDiagram(input, { origin })` | Pure: lay out a node-and-arrow diagram as board shapes, no model needed |
-| `sketchToShapes(input, { origin, seed })` | Pure: SVG paths → hand-drawn pen strokes, no model needed |
+| `sketchToShapes(input, { origin, seed })` | Pure: points or SVG paths → hand-drawn pen strokes, no model needed |
+| `smoothPath(points, closed)` | SVG path data for a smooth line through points |
 | `joinParts(input)` | The moves `sketchToShapes` makes to join attached parts |
 | `parsePath(d)`, `samplePath(subpath, step)` | SVG path data → subpaths → evenly spaced points |
 | `LIMITS`, `DEFAULTS`, `DIAGRAM_STYLE`, `SKETCH_DEFAULTS` | Limits and default styles |
