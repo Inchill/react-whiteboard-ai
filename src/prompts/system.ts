@@ -45,7 +45,9 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         '- Poses: a sitting animal has a pear-shaped body, wider at the bottom, with the head on top; its front legs come straight down ' +
             'from the chest to the ground with small oval paws; a tail curled in front starts at the back of the body, runs along the ' +
             'ground and ends beside the paws. A standing animal has four legs from the bottom of the body to one ground line.',
-        '- Strokes: one continuous line per M, 5–40 strokes in all. Use A for circles and round ends, C and Q for smooth curves. ' +
+        '- Strokes: 5–40 in all, each one continuous line. For organic outlines (bodies, heads, tails, legs, leaves) give `points` ' +
+            'along the line, 5–16 of them, closer together where it bends, with `closed: true` for a loop; the line passes smoothly ' +
+            'through each point, so you never need curve control points. Use `d` for circles (A), straight lines and exact shapes. ' +
             'Where two outlines meet, end one at the other instead of drawing through it. Outlines width 4, details 2–3.',
         '- Keep it simple and cute, like a quick marker drawing, with color on a few strokes.',
         '- Example call for "a little bird on a branch":',

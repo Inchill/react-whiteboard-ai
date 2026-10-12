@@ -152,7 +152,7 @@ export function countSoFar(name: string, partialJson: string): number {
         add_shapes: /"type"\s*:/g,
         update_shapes: /"id"\s*:/g,
         add_diagram: /"id"\s*:/g,
-        draw_sketch: /"d"\s*:/g,
+        draw_sketch: /"(?:d|points)"\s*:/g,
     };
     const pattern = patterns[name] ?? /"[^"]+"\s*[,\]]/g;
     return partialJson.match(pattern)?.length ?? 0;

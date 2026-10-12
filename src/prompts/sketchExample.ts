@@ -21,10 +21,14 @@ export const SKETCH_EXAMPLE: SketchInput = {
         { part: 'head', d: 'M52 30 A16 16 0 1 1 84 30 A16 16 0 1 1 52 30 Z', width: 4 },
         { part: 'beak', d: 'M83 27 L92 31 L82 35', color: '#f08c00' },
         { part: 'eye', d: 'M69 26 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0' },
-        { part: 'body', d: 'M55 40 C34 36 18 46 20 62 C22 78 40 82 56 80 C72 78 82 62 78 44', width: 4 },
-        { part: 'wing', d: 'M34 56 C40 48 54 50 58 60 C50 66 40 66 34 56 Z' },
-        { part: 'tail', d: 'M21 52 C14 50 9 47 6 44 C8 52 12 58 20 62' },
+        {
+            part: 'body',
+            points: [[55, 40], [38, 38], [24, 46], [20, 61], [26, 74], [40, 81], [56, 80], [70, 74], [78, 61], [78, 46]],
+            width: 4,
+        },
+        { part: 'wing', points: [[34, 56], [42, 50], [52, 52], [58, 60], [48, 65], [38, 63]], closed: true },
+        { part: 'tail', points: [[21, 52], [12, 48], [6, 44], [9, 53], [14, 58], [20, 62]] },
         { part: 'legs', d: 'M46 80 L44 87 M56 80 L58 87', color: '#f08c00' },
-        { part: 'branch', d: 'M6 88 C30 86 60 90 94 87', color: '#8d6e63', width: 4 },
+        { part: 'branch', points: [[6, 88], [30, 86.5], [60, 89], [94, 87]], color: '#8d6e63', width: 4 },
     ],
 };
