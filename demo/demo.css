@@ -519,6 +519,11 @@ button:disabled {
     white-space: pre-wrap;
 }
 
+/* Trim the font's uneven leading so icons center on the glyphs rather than on the line box. */
+.trim {
+    text-box: trim-both cap alphabetic;
+}
+
 .spinner {
     flex: none;
     width: 12px;

@@ -260,7 +260,7 @@ export function App() {
                     {busy && !live?.blocks.some((b) => b && b.type !== 'other') && (
                         <p className="working" role="status">
                             <span className="spinner" aria-hidden />
-                            等待模型回复
+                            <span className="trim">等待模型回复</span>
                         </p>
                     )}
                     <div ref={logEnd} />
@@ -465,10 +465,10 @@ function Thought({ text, seconds, live, open: controlled, onToggle, defaultOpen 
             <button type="button" className="thought-toggle" aria-expanded={open} aria-controls={id} onClick={toggle}>
                 <span className="thought-status">
                     {live && <span className="spinner" aria-hidden />}
-                    {live ? `正在思考，已 ${seconds} 秒` : seconds ? `思考了 ${seconds} 秒` : '思考过程'}
+                    <span className="trim">{live ? `正在思考，已 ${seconds} 秒` : seconds ? `思考了 ${seconds} 秒` : '思考过程'}</span>
                 </span>
                 <span className="thought-action">
-                    {open ? '收起' : '展开'}
+                    <span className="trim">{open ? '收起' : '展开'}</span>
                     <span className="thought-chevron" aria-hidden />
                 </span>
             </button>
