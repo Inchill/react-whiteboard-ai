@@ -187,7 +187,27 @@ describe('layoutDiagram', () => {
         expect(into[0].x2).toBeLessThan(db.x + db.w);
     });
 
-    it('draws same-layer links around boxes in between, and keeps a pair apart', () => {
+    it('merges several links into one box into a single arrow, but keeps labelled links apart', () => {
+        const { shapes, box } = boxesOf({
+            nodes: [
+                ...['a', 'b', 'c'].map((id) => ({ id, label: id, layer: 'top' })),
+                ...['t', 'u'].map((id) => ({ id, label: id, layer: 'bottom' })),
+            ],
+            edges: [
+                { from: 'a', to: 't' },
+                { from: 'b', to: 't' },
+                { from: 'c', to: 't' },
+                { from: 'c', to: 'u' },
+                { from: 'b', to: 'u', label: '写入' },
+            ],
+        });
+        const into = (id: string) => shapes.filter((s) => s.type === 'arrow' && Math.abs(s.y2 - (box(id).y - 4)) < 1 && s.x2 > box(id).x && s.x2 < box(id).x + box(id).w);
+        expect(into('t')).toHaveLength(1);
+        // u has one plain link and one labelled link: two arrows of their own.
+        expect(into('u')).toHaveLength(2);
+    });
+
+    it('draws same-layer links straight between neighbors and around boxes in between', () => {
         const { shapes, box } = boxesOf({
             nodes: ['a', 'b', 'c'].map((id) => ({ id, label: id, layer: 'one' })),
             edges: [
@@ -196,11 +216,12 @@ describe('layoutDiagram', () => {
                 { from: 'b', to: 'a', label: '回复' },
             ],
         });
-        // Three detours above the row, each a single arrow with its own height.
-        const ys = segmentsOf(shapes)
-            .filter((g) => g.y1 === g.y2 && g.y1 < box('a').y)
-            .map((g) => g.y1);
-        expect(new Set(ys).size).toBe(3);
+        // a and b sit side by side: two parallel straight arrows. a → c goes around b.
+        const row = box('a').y;
+        const horizontal = segmentsOf(shapes).filter((g) => g.y1 === g.y2);
+        const between = horizontal.filter((g) => g.y1 > row && g.y1 < row + box('a').h);
+        expect(new Set(between.map((g) => g.y1)).size).toBe(2);
+        expect(horizontal.filter((g) => g.y1 < row || g.y1 > row + box('a').h)).toHaveLength(1);
         expect(shapes.filter((s) => s.type === 'line')).toHaveLength(0);
     });
 
@@ -279,7 +300,7 @@ describe('layout quality over the benchmark cases', () => {
     });
 
     // Cases that still have these defects; remove an id once its layout is fixed.
-    const knownIssues = new Set(['state-machine', 'monitoring', 'service-calls', 'dev-loops']);
+    const knownIssues = new Set(['state-machine', 'dev-loops']);
 
     it('keeps edge labels clear of boxes, lines and each other, and lines apart', () => {
         for (const { id, shapes } of cases.filter((c) => !knownIssues.has(c.id))) {

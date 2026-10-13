@@ -115,7 +115,7 @@ function rankNodes(nodes: DiagramNode[], edges: DiagramEdge[]): { rank: Map<stri
  * here count straight links between adjacent layers only; ports, lanes and buses change what is
  * actually drawn, so the layout draws each candidate and keeps the one that looks best.
  */
-function orderLayers(ids: string[], links: [string, string][], rank: Map<string, number>): string[][][] {
+function orderLayers(ids: string[], links: [string, string][], rank: Map<string, number>, sideways: [string, string][] = []): string[][][] {
     const count = Math.max(0, ...ids.map((id) => rank.get(id)!)) + 1;
     const initial: string[][] = Array.from({ length: count }, () => []);
     for (const id of ids) initial[rank.get(id)!].push(id);
@@ -205,6 +205,32 @@ function orderLayers(ids: string[], links: [string, string][], rank: Map<string,
     }
     // Fewest crossings first; the sort is stable, so ties keep the order above.
     found.sort((a, b) => a.crossings - b.crossings);
+    // Rows with same-layer edges: also try each order with those rows rearranged so the boxes that
+    // link to each other sit side by side (a straight arrow instead of a detour), trading against
+    // crossings with the rows next to it. Exhaustive, so only for short rows.
+    const sideRows = [...new Set(sideways.map(([a]) => rank.get(a)!))].filter((r) => initial[r].length <= 7);
+    if (sideRows.length) {
+        const permutations = (row: string[]): string[][] =>
+            row.length <= 1 ? [row] : row.flatMap((id, i) => permutations([...row.slice(0, i), ...row.slice(i + 1)]).map((p) => [id, ...p]));
+        for (const f of [...found]) {
+            const layers = f.layers.map((row) => [...row]);
+            for (const r of sideRows) {
+                const cost = () => {
+                    const at = new Map(layers[r].map((id, i) => [id, i]));
+                    const apart = sideways.filter(([a]) => rank.get(a) === r).reduce((sum, [a, b]) => sum + Math.abs(at.get(a)! - at.get(b)!) - 1, 0);
+                    return 2 * around(layers, r) + apart;
+                };
+                let best = { row: layers[r], cost: cost() };
+                for (const row of permutations(layers[r])) {
+                    layers[r] = row;
+                    const c = cost();
+                    if (c < best.cost) best = { row, cost: c };
+                }
+                layers[r] = best.row;
+            }
+            found.push({ layers, crossings: crossings(layers) });
+        }
+    }
     const seen = new Set<string>();
     return found.filter((f) => {
         const key = f.layers.map((row) => row.join('\u0001')).join('\u0002');
@@ -316,7 +342,6 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
     const links: Link[] = edges
         .filter((e) => r(e.to) !== r(e.from) && !loops.includes(e))
         .map((e) => (r(e.to) > r(e.from) ? { edge: e, from: e.from, to: e.to, reversed: false } : { edge: e, from: e.to, to: e.from, reversed: true }));
-    const sideways = edges.filter((e) => r(e.to) === r(e.from));
 
     // Links that skip layers get a narrow placeholder ("channel") in every layer they cross, so
     // ordering and placement keep a free lane for them and they never run through a box.
@@ -336,7 +361,13 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         for (let k = 1; k < hops.length; k++) ties.push([hops[k - 1], hops[k]]);
     });
     const isChannel = (id: string) => id.startsWith('\u0000');
-    const candidates = orderLayers(allIds, ties, rank);
+    const sideways = edges.filter((e) => r(e.to) === r(e.from));
+    const candidates = orderLayers(
+        allIds,
+        ties,
+        rank,
+        sideways.map((e) => [e.from, e.to]),
+    );
     const layers = candidates[Math.min(choice, candidates.length - 1)];
 
     // One box size for the whole diagram, wide enough for the longest label.
@@ -358,37 +389,51 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         neighbors.get(b)!.push(a);
     }
     const half = (id: string) => (isChannel(id) ? 0 : C / 2);
-    const space = (a: string, b: string) => half(a) + half(b) + (isChannel(a) || isChannel(b) ? 20 : gapCross);
+    // Neighbors joined by same-layer edges get a gap wide enough for the arrows' labels.
+    const pairKey = (a: string, b: string) => [a, b].sort().join('\u0001');
+    const sideGap = new Map<string, number>();
+    for (const e of sideways) {
+        const size = e.label ? measureText(e.label, S.edgeLabelSize) : { w: 0, h: 0 };
+        const need = e.label ? (down ? size.w + 24 : size.h + 16) : 0;
+        const key = pairKey(e.from, e.to);
+        sideGap.set(key, Math.max(sideGap.get(key) ?? gapCross, need));
+    }
+    const space = (a: string, b: string) => half(a) + half(b) + (isChannel(a) || isChannel(b) ? 20 : (sideGap.get(pairKey(a, b)) ?? gapCross));
     const mid = placeAcross(layers, neighbors, rank, space);
     const lo = (id: string) => mid.get(id)! - C / 2;
     const minU = Math.min(...nodes.map((n) => lo(n.id)));
     const maxU = Math.max(...nodes.map((n) => lo(n.id) + C));
 
-    // Same-layer edges that cannot be a short straight arrow detour over their layer. Each layer gets
-    // room above it for its detours, so they never squeeze against the arrows coming in from above.
-    const pairKey = (e: DiagramEdge) => [e.from, e.to].sort().join('\u0001');
-    const detourOf = new Map<DiagramEdge, number>();
-    const detourCount = new Map<number, number>();
+    // Same-layer edges between neighbors are straight arrows. The rest detour around the row, above
+    // or below it, whichever side has fewer lines arriving at the boxes in between. Shorter detours
+    // run closer to the row, so nested detours never cross; each row gets room for its detours.
+    type Detour = { e: DiagramEdge; rk: number; above: boolean; level: number; a: number; b: number };
+    const detours: Detour[] = [];
     for (const e of sideways) {
         const a = mid.get(e.from)!;
         const b = mid.get(e.to)!;
         const rk = r(e.from);
-        const between = layers[rk].some((id) => !isChannel(id) && id !== e.from && id !== e.to && mid.get(id)! > Math.min(a, b) && mid.get(id)! < Math.max(a, b));
-        const twins = sideways.filter((f) => pairKey(f) === pairKey(e)).length;
-        const labelFits = !e.label || measureText(e.label, S.edgeLabelSize).w + 12 <= gapCross;
-        if (between || twins > 1 || !labelFits) {
-            const k = detourCount.get(rk) ?? 0;
-            detourOf.set(e, k);
-            detourCount.set(rk, k + 1);
-        }
+        const inside = layers[rk].filter((id) => !isChannel(id) && id !== e.from && id !== e.to && mid.get(id)! > Math.min(a, b) && mid.get(id)! < Math.max(a, b));
+        if (!inside.length) continue;
+        const load = (above: boolean) => {
+            const at = (id: string) => links.filter((l) => (above ? l.to : l.from) === id).length;
+            return inside.reduce((sum, id) => sum + at(id), 0) + 0.5 * (at(e.from) + at(e.to));
+        };
+        detours.push({ e, rk, above: load(true) <= load(false), level: 0, a: Math.min(a, b), b: Math.max(a, b) });
     }
-    const extra = (rk: number) => {
-        const n = detourCount.get(rk) ?? 0;
+    for (const d of [...detours].sort((x, y) => x.b - x.a - (y.b - y.a))) {
+        const under = detours.filter((o) => o.level && o.rk === d.rk && o.above === d.above && o.a < d.b + 1 && d.a < o.b + 1);
+        d.level = 1 + Math.max(0, ...under.map((o) => o.level));
+    }
+    const room = (rk: number, above: boolean) => {
+        const n = Math.max(0, ...detours.filter((d) => d.rk === rk && d.above === above).map((d) => d.level));
         return n ? 14 + n * 16 : 0;
     };
+    const extra = (rk: number) => room(rk, true);
+    const below = (rk: number) => room(rk, false);
     const layerV = (rk: number) => {
         let v = rk * (M + gapMain);
-        for (let k = 0; k <= rk; k++) v += extra(k);
+        for (let k = 0; k <= rk; k++) v += extra(k) + (k < rk ? below(k) : 0);
         return v;
     };
 
@@ -470,8 +515,8 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
     layerNames.forEach((name, rk) => {
         const p = toXY(minU - labelRoom - bandPad, layerV(rk) - bandPad - extra(rk));
         const len = maxU - minU + labelRoom + 2 * bandPad;
-        const w = down ? len : M + 2 * bandPad + extra(rk);
-        const h = down ? M + 2 * bandPad + extra(rk) : len;
+        const w = down ? len : M + 2 * bandPad + extra(rk) + below(rk);
+        const h = down ? M + 2 * bandPad + extra(rk) + below(rk) : len;
         out.band.push({ id: createId(), type: 'rect', x: p.x, y: p.y, w, h, fill: 'semi', color: S.layerColor, strokeWidth: 1, strokeStyle: 'dashed' });
         const size = layerLabels[rk];
         out.band.push(text(down ? p.x + 20 : p.x + (w - size.w) / 2, down ? p.y + (h - size.h) / 2 : p.y + 16, name, S.layerLabelSize, '#868e96'));
@@ -481,7 +526,7 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
     const bottom = (id: string) => layerV(r(id)) + M;
     const top = (id: string) => layerV(r(id));
     // The free gap above layer t: from the bottom of layer t - 1 to the top of t's detour room.
-    const gapTop = (t: number) => layerV(t - 1) + M;
+    const gapTop = (t: number) => layerV(t - 1) + M + below(t - 1);
     const gapEnd = (t: number) => layerV(t) - extra(t);
     const gapMid = (t: number) => (gapTop(t) + gapEnd(t)) / 2;
     const styleOf = (l: Link) => l.edge.style ?? (l.reversed ? 'dashed' : 'solid');
@@ -531,8 +576,23 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         }
     }
 
-    // Everything else gets its own port on the box side, spread and ordered by where the link heads.
+    // Merges: several links from the layer just before into one box (that are not part of a bus)
+    // join on one line in the gap and enter the box with a single arrow, instead of each taking its
+    // own port and lane. Only unlabelled links of the same style merge: a dashed link stays dashed,
+    // and a label keeps the room of its own line.
     const rest = links.filter((l) => !bused.has(l));
+    const merged = new Map<Link, Link[]>();
+    for (const n of nodes) {
+        const into = rest.filter((l) => l.to === n.id && !l.reversed && !l.edge.label && !channels.get(l)!.length);
+        for (const style of new Set(into.map((l) => l.edge.style ?? 'solid'))) {
+            const group = into.filter((l) => (l.edge.style ?? 'solid') === style);
+            if (group.length >= 2) group.forEach((l) => merged.set(l, group));
+        }
+    }
+    const groups = [...new Set(merged.values())];
+
+    // Everything else gets its own port on the box side, spread and ordered by where the link heads.
+    // A merge takes one port on its target, ordered by where its sources are on average.
     const firstHop = (l: Link) => mid.get(channels.get(l)![0] ?? l.to)!;
     const lastHop = (l: Link) => mid.get(channels.get(l)!.at(-1) ?? l.from)!;
     const ports = new Map<Link, { out: number; in: number }>();
@@ -541,8 +601,11 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         outs.forEach((l, k) => ports.set(l, { out: lo(n.id) + (C * (k + 1)) / (outs.length + 1), in: 0 }));
     }
     for (const n of nodes) {
-        const ins = rest.filter((l) => l.to === n.id).sort((a, b) => lastHop(a) - lastHop(b));
-        ins.forEach((l, k) => (ports.get(l)!.in = lo(n.id) + (C * (k + 1)) / (ins.length + 1)));
+        const slots = [
+            ...rest.filter((l) => l.to === n.id && !merged.has(l)).map((l) => ({ links: [l], key: lastHop(l) })),
+            ...groups.filter((g) => g[0].to === n.id).map((g) => ({ links: g, key: g.reduce((sum, l) => sum + mid.get(l.from)!, 0) / g.length })),
+        ].sort((a, b) => a.key - b.key);
+        slots.forEach((slot, k) => slot.links.forEach((l) => (ports.get(l)!.in = lo(n.id) + (C * (k + 1)) / (slots.length + 1))));
     }
     const fits = (rk: number, id: string, u: number) => {
         const row = layers[rk];
@@ -579,7 +642,8 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         u >= lo(id) + 6 &&
         u <= lo(id) + C - 6 &&
         rest.every((f) => f === except || (side === 'out' ? f.from !== id : f.to !== id) || Math.abs(ports.get(f)![side] - u) >= 12);
-    for (const l of rest) {
+    const routed = rest.filter((l) => !merged.has(l));
+    for (const l of routed) {
         const p = ports.get(l)!;
         const chain = channels.get(l)!;
         const before = chain.length ? mid.get(chain[chain.length - 1])! : p.out;
@@ -602,8 +666,8 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
     };
     for (let pass = 0; pass < 3; pass++) {
         let moved = false;
-        for (const a of rest) {
-            for (const b of rest) {
+        for (const a of routed) {
+            for (const b of routed) {
                 if (a === b) continue;
                 for (const ta of turnsIn(a)) {
                     const tb = turnsIn(b).find((x) => x.t === ta.t);
@@ -635,8 +699,10 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         }
         if (!moved) break;
     }
+    // A merge needs one lane in its gap, held by its first link.
     const turning = new Map<number, Link[]>();
-    for (const l of rest) {
+    for (const g of groups) (turning.get(r(g[0].to)) ?? turning.set(r(g[0].to), []).get(r(g[0].to))!).push(g[0]);
+    for (const l of routed) {
         const hops = hopsOf(l);
         hops.slice(1).forEach((u, k) => {
             if (same(u, hops[k])) return;
@@ -677,7 +743,22 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         const k = list.indexOf(l);
         return list.length === 1 ? (first + last) / 2 : first + ((last - first) * k) / (list.length - 1);
     };
-    for (const l of rest) {
+    for (const g of groups) {
+        const target = g[0].to;
+        const v = lane(g[0], r(target));
+        const at = ports.get(g[0])!.in;
+        const style = g[0].edge.style ?? 'solid';
+        const us = g.map((l) => ports.get(l)!.out);
+        for (const l of g) {
+            const u = ports.get(l)!.out;
+            const stub: [Pt, Pt] = [toXY(u, bottom(l.from) + 2), toXY(u, v)];
+            out.edge.push(line(stub[0], stub[1], style));
+            edgeLabel(l.edge.label, [stub]);
+        }
+        if (Math.max(...us, at) - Math.min(...us, at) > 1) out.edge.push(line(toXY(Math.min(...us, at), v), toXY(Math.max(...us, at), v), style));
+        out.edge.push(arrow(toXY(at, v), toXY(at, top(target) - 4), style));
+    }
+    for (const l of routed) {
         const hops = hopsOf(l);
         const points: UV[] = [{ u: hops[0], v: bottom(l.from) }];
         hops.slice(1).forEach((u, k) => {
@@ -689,27 +770,39 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         path(l.reversed ? points.reverse() : points, styleOf(l), l.edge.label);
     }
 
-    // Same-layer edges: a straight arrow between neighbors, or the detour planned above.
-    for (const e of sideways) {
+    // Same-layer edges: straight arrows between neighbors (side by side when there are several), or
+    // the detours planned above. A detour's legs sit on the half of the box toward its other end,
+    // the outer detours nearer the middle, so no leg runs through a lower detour.
+    const straight = sideways.filter((e) => !detours.some((d) => d.e === e));
+    for (const e of straight) {
         const a = mid.get(e.from)!;
         const b = mid.get(e.to)!;
         const rk = r(e.from);
         const rightward = b > a;
-        const style = e.style ?? 'solid';
-        const k = detourOf.get(e);
-        if (k === undefined) {
-            const v = layerV(rk) + M / 2;
-            path([{ u: rightward ? a + C / 2 : a - C / 2, v }, { u: rightward ? b - C / 2 : b + C / 2, v }], style, e.label);
-            continue;
+        const twins = straight.filter((f) => pairKey(f.from, f.to) === pairKey(e.from, e.to));
+        const v = layerV(rk) + M / 2 + (twins.indexOf(e) - (twins.length - 1) / 2) * 14;
+        path([{ u: rightward ? a + C / 2 : a - C / 2, v }, { u: rightward ? b - C / 2 : b + C / 2, v }], e.style ?? 'solid', e.label);
+    }
+    const legs = new Map<string, number>();
+    const legKey = (d: Detour, id: string) => `${detours.indexOf(d)}:${id}`;
+    for (const n of nodes) {
+        for (const above of [true, false]) {
+            const here = detours.filter((d) => d.above === above && (d.e.from === n.id || d.e.to === n.id));
+            const otherSide = (d: Detour) => mid.get(d.e.from === n.id ? d.e.to : d.e.from)! > mid.get(n.id)!;
+            const left = here.filter((d) => !otherSide(d)).sort((x, y) => x.level - y.level);
+            const right = here.filter(otherSide).sort((x, y) => y.level - x.level);
+            left.forEach((d, k) => legs.set(legKey(d, n.id), lo(n.id) + ((C / 2) * (k + 1)) / (left.length + 1)));
+            right.forEach((d, k) => legs.set(legKey(d, n.id), mid.get(n.id)! + ((C / 2) * (k + 1)) / (right.length + 1)));
         }
-        const over = layerV(rk) - 16 - k * 16;
-        // Alternate the inset so detours between the same pair of boxes do not share their legs.
-        const inset = C / 4 + (k % 2) * 14;
-        const from = a + (rightward ? inset : -inset);
-        const to = b + (rightward ? -inset : inset);
-        const xy = path([{ u: from, v: layerV(rk) }, { u: from, v: over }, { u: to, v: over }, { u: to, v: layerV(rk) }], style);
-        // Beside the stretch above the row.
-        edgeLabel(e.label, pairs(xy), 1);
+    }
+    for (const d of detours) {
+        const edgeV = d.above ? layerV(d.rk) : layerV(d.rk) + M;
+        const v = d.above ? edgeV - d.level * 16 : edgeV + d.level * 16;
+        const from = legs.get(legKey(d, d.e.from))!;
+        const to = legs.get(legKey(d, d.e.to))!;
+        const xy = path([{ u: from, v: edgeV }, { u: from, v }, { u: to, v }, { u: to, v: edgeV }], d.e.style ?? 'solid');
+        // Beside the stretch along the row.
+        edgeLabel(d.e.label, pairs(xy), 1);
     }
 
     // Long cycles loop around the far side, each in its own lane. A box at the end of its row is
@@ -732,7 +825,7 @@ function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number
         if (lastInRow(e.to)) points.push({ u: outer, v: layerV(r(e.to)) + M / 2 }, { u: lo(e.to) + C, v: layerV(r(e.to)) + M / 2 });
         else {
             const u = mid.get(e.to)! + C / 4;
-            const v = layerV(r(e.to)) + M + 12 + k * 8;
+            const v = layerV(r(e.to)) + M + below(r(e.to)) + 12 + k * 8;
             points.push({ u: outer, v }, { u, v }, { u, v: layerV(r(e.to)) + M });
         }
         const segs = pairs(path(points, style));
