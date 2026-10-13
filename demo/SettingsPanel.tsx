@@ -41,7 +41,7 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
         <form className="settings" onSubmit={submit} aria-labelledby={`${id}-title`}>
             <h2 id={`${id}-title`}>连接模型</h2>
             <p className="settings-intro">
-                Anthropic 消息格式或 OpenAI 兼容格式的接口都能用：Claude、DeepSeek、千问、智谱、豆包，也可以是公司内部网关、one-api、LiteLLM 等。
+                Anthropic 消息格式或 OpenAI 兼容格式的接口都能用：Claude、DeepSeek、千问、智谱、豆包，也可以是公司内部网关。
             </p>
 
             <EndpointField
