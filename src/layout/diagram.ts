@@ -108,31 +108,110 @@ function rankNodes(nodes: DiagramNode[], edges: DiagramEdge[]): { rank: Map<stri
     return { rank, layerNames: [] };
 }
 
-/** Order nodes inside each layer to reduce crossings (barycenter heuristic, a few sweeps). */
-function orderLayers(ids: string[], links: [string, string][], rank: Map<string, number>): string[][] {
+/**
+ * Candidate orders of the nodes inside each layer, fewest crossings first. Several starting orders
+ * each get barycenter or median sweeps, keeping the best order seen (sweeps can make things worse
+ * again), then a transposition pass that swaps neighbors while that removes crossings. Crossings
+ * here count straight links between adjacent layers only; ports, lanes and buses change what is
+ * actually drawn, so the layout draws each candidate and keeps the one that looks best.
+ */
+function orderLayers(ids: string[], links: [string, string][], rank: Map<string, number>): string[][][] {
     const count = Math.max(0, ...ids.map((id) => rank.get(id)!)) + 1;
-    const layers: string[][] = Array.from({ length: count }, () => []);
-    for (const id of ids) layers[rank.get(id)!].push(id);
+    const initial: string[][] = Array.from({ length: count }, () => []);
+    for (const id of ids) initial[rank.get(id)!].push(id);
 
     const neighbors = new Map<string, string[]>(ids.map((id) => [id, []]));
+    // Links between layer r and r + 1, as [node in r, node in r + 1].
+    const between: [string, string][][] = Array.from({ length: Math.max(0, count - 1) }, () => []);
     for (const [a, b] of links) {
         neighbors.get(a)!.push(b);
         neighbors.get(b)!.push(a);
+        const [hi, lo] = rank.get(a)! < rank.get(b)! ? [a, b] : [b, a];
+        if (rank.get(lo)! - rank.get(hi)! === 1) between[rank.get(hi)!].push([hi, lo]);
     }
-    const sweep = (r: number, ref: number) => {
+
+    /** Crossings between layer r and r + 1. */
+    const crossingsAt = (layers: string[][], r: number) => {
+        const top = new Map(layers[r].map((id, i) => [id, i]));
+        const bottom = new Map(layers[r + 1].map((id, i) => [id, i]));
+        const pairs = between[r].map(([a, b]) => [top.get(a)!, bottom.get(b)!]);
+        let n = 0;
+        for (let i = 0; i < pairs.length; i++) {
+            for (let j = i + 1; j < pairs.length; j++) {
+                if ((pairs[i][0] - pairs[j][0]) * (pairs[i][1] - pairs[j][1]) < 0) n++;
+            }
+        }
+        return n;
+    };
+    const crossings = (layers: string[][]) => between.reduce((sum, _, r) => sum + crossingsAt(layers, r), 0);
+    const around = (layers: string[][], r: number) => (r > 0 ? crossingsAt(layers, r - 1) : 0) + (r < count - 1 ? crossingsAt(layers, r) : 0);
+
+    const sweep = (layers: string[][], r: number, ref: number, median: boolean) => {
         const pos = new Map(layers[ref].map((id, i) => [id, i]));
         const keyed = layers[r].map((id, i) => {
-            const near = neighbors.get(id)!.filter((m) => pos.has(m)).map((m) => pos.get(m)!);
-            return { id, key: near.length ? near.reduce((a, b) => a + b, 0) / near.length : i, i };
+            const near = neighbors
+                .get(id)!
+                .filter((m) => pos.has(m))
+                .map((m) => pos.get(m)!)
+                .sort((a, b) => a - b);
+            let key = i;
+            if (near.length) key = median ? (near[(near.length - 1) >> 1] + near[near.length >> 1]) / 2 : near.reduce((a, b) => a + b, 0) / near.length;
+            return { id, key, i };
         });
         keyed.sort((a, b) => a.key - b.key || a.i - b.i);
         layers[r] = keyed.map((k) => k.id);
     };
+
+    const improve = (start: string[][], median: boolean) => {
+        const layers = start.map((row) => [...row]);
+        let best = layers.map((row) => [...row]);
+        let bestCount = crossings(best);
+        for (let iter = 0; iter < 8 && bestCount > 0; iter++) {
+            for (let r = 1; r < count; r++) sweep(layers, r, r - 1, median);
+            for (let r = count - 2; r >= 0; r--) sweep(layers, r, r + 1, median);
+            const n = crossings(layers);
+            if (n < bestCount) {
+                best = layers.map((row) => [...row]);
+                bestCount = n;
+            }
+        }
+        // Transposition: swap neighbors while that removes crossings.
+        for (let improved = true; improved && bestCount > 0; ) {
+            improved = false;
+            for (let r = 0; r < count; r++) {
+                for (let i = 0; i + 1 < best[r].length; i++) {
+                    const before = around(best, r);
+                    [best[r][i], best[r][i + 1]] = [best[r][i + 1], best[r][i]];
+                    if (around(best, r) < before) {
+                        improved = true;
+                        bestCount = crossings(best);
+                    } else [best[r][i], best[r][i + 1]] = [best[r][i + 1], best[r][i]];
+                }
+            }
+        }
+        return { layers: best, crossings: bestCount };
+    };
+
+    // The plain barycenter sweeps from the input order, as a candidate of its own: the drawn result
+    // is sometimes better than for orders with fewer counted crossings.
+    const plain = initial.map((row) => [...row]);
     for (let iter = 0; iter < 6; iter++) {
-        for (let r = 1; r < count; r++) sweep(r, r - 1);
-        for (let r = count - 2; r >= 0; r--) sweep(r, r + 1);
+        for (let r = 1; r < count; r++) sweep(plain, r, r - 1, false);
+        for (let r = count - 2; r >= 0; r--) sweep(plain, r, r + 1, false);
     }
-    return layers;
+    const found = [{ layers: plain, crossings: crossings(plain) }];
+    for (const start of [initial, initial.map((row) => [...row].reverse())]) {
+        for (const median of [false, true]) found.push(improve(start, median));
+    }
+    // Fewest crossings first; the sort is stable, so ties keep the order above.
+    found.sort((a, b) => a.crossings - b.crossings);
+    const seen = new Set<string>();
+    return found.filter((f) => {
+        const key = f.layers.map((row) => row.join('\u0001')).join('\u0002');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    }).map((f) => f.layers);
 }
 
 /**
@@ -173,7 +252,54 @@ function placeAcross(layers: string[][], neighbors: Map<string, string[]>, rank:
     return pos;
 }
 
+/**
+ * Lay out a diagram. Each candidate node order is drawn with throwaway ids and scored by what the
+ * reader sees (crossings, lines through boxes); the best one is drawn again for real.
+ */
 export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {}): DiagramResult {
+    let trial = 0;
+    const scratch: DiagramOptions = { ...options, createId: () => `trial${++trial}` };
+    const first = layoutWith(input, scratch, 0);
+    let best = { choice: 0, cost: drawnCost(first.shapes) };
+    for (let choice = 1; choice < first.choices && best.cost > 0; choice++) {
+        const cost = drawnCost(layoutWith(input, scratch, choice).shapes);
+        if (cost < best.cost) best = { choice, cost };
+    }
+    const { shapes, nodes } = layoutWith(input, options, best.choice);
+    return { shapes, nodes };
+}
+
+/** How badly a drawn diagram reads: crossings between lines, and lines that run through boxes. */
+function drawnCost(shapes: Shape[]): number {
+    type Seg = [Pt, Pt];
+    const segs: Seg[][] = [];
+    const boxes: { x: number; y: number; w: number; h: number }[] = [];
+    for (const s of shapes) {
+        if (s.type === 'line' || s.type === 'arrow') {
+            const pts: Pt[] = [{ x: s.x1, y: s.y1 }, ...(s.via ?? []).map(([x, y]) => ({ x, y })), { x: s.x2, y: s.y2 }];
+            segs.push(pts.slice(1).map((b, i) => [pts[i], b]));
+        } else if ((s.type === 'rect' || s.type === 'ellipse') && s.strokeStyle !== 'dashed') boxes.push(s);
+    }
+    const cross = ([a, b]: Seg, [c, d]: Seg) => {
+        const den = (d.y - c.y) * (b.x - a.x) - (d.x - c.x) * (b.y - a.y);
+        if (Math.abs(den) < 1e-9) return false;
+        const ua = ((d.x - c.x) * (a.y - c.y) - (d.y - c.y) * (a.x - c.x)) / den;
+        const ub = ((b.x - a.x) * (a.y - c.y) - (b.y - a.y) * (a.x - c.x)) / den;
+        const inside = (t: number, len: number) => t * len > 0.5 && (1 - t) * len > 0.5;
+        return inside(ua, Math.hypot(b.x - a.x, b.y - a.y)) && inside(ub, Math.hypot(d.x - c.x, d.y - c.y));
+    };
+    // Axis-aligned segments only (the layout draws nothing else), shrunk by 2 like the box edges.
+    const through = ([a, b]: Seg, r: (typeof boxes)[number]) =>
+        Math.max(a.x, b.x) > r.x + 2 && Math.min(a.x, b.x) < r.x + r.w - 2 && Math.max(a.y, b.y) > r.y + 2 && Math.min(a.y, b.y) < r.y + r.h - 2;
+    let cost = 0;
+    segs.forEach((line, i) => {
+        for (const other of segs.slice(i + 1)) for (const s of line) for (const t of other) if (cross(s, t)) cost += 8;
+        for (const s of line) for (const r of boxes) if (through(s, r)) cost += 10;
+    });
+    return cost;
+}
+
+function layoutWith(input: DiagramInput, options: DiagramOptions, choice: number): DiagramResult & { choices: number } {
     const createId = options.createId ?? defaultCreateId;
     const S = DIAGRAM_STYLE;
     const down = (input.direction ?? 'down') === 'down';
@@ -210,7 +336,8 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
         for (let k = 1; k < hops.length; k++) ties.push([hops[k - 1], hops[k]]);
     });
     const isChannel = (id: string) => id.startsWith('\u0000');
-    const layers = orderLayers(allIds, ties, rank);
+    const candidates = orderLayers(allIds, ties, rank);
+    const layers = candidates[Math.min(choice, candidates.length - 1)];
 
     // One box size for the whole diagram, wide enough for the longest label.
     const sizes = new Map(nodes.map((n) => [n.id, measureText(n.label, S.fontSize)]));
@@ -631,7 +758,7 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
     const all = [...out.band, ...out.edge, ...out.node];
     const bounds = unionBox(all.map(shapeBox))!;
     const target = { x: input.x ?? options.origin?.x ?? 0, y: input.y ?? options.origin?.y ?? 0 };
-    return { shapes: all.map((s) => translateShape(s, target.x - bounds.x, target.y - bounds.y)), nodes: nodeIds };
+    return { shapes: all.map((s) => translateShape(s, target.x - bounds.x, target.y - bounds.y)), nodes: nodeIds, choices: candidates.length };
 }
 
 type Rect = { x: number; y: number; w: number; h: number };
