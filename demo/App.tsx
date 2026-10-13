@@ -103,6 +103,14 @@ export function App() {
         return () => watch.disconnect();
     }, []);
 
+    // The composer grows with its text, up to a few lines, then scrolls.
+    useLayoutEffect(() => {
+        const el = composer.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+    }, [input]);
+
     useEffect(() => {
         if (fitRequest) board.current?.zoomToFit();
     }, [fitRequest]);
@@ -389,48 +397,63 @@ export function App() {
                             {examples.hint && !deepThinking && <p className="examples-hint">{examples.hint}</p>}
                         </div>
                     )}
-                    <div className="composer-box">
+                    <div
+                        className={`composer-box${!canAsk ? ' is-off' : ''}`}
+                        // A click anywhere on the box (not on its buttons) puts the cursor in the text.
+                        onMouseDown={(e) => {
+                            if (e.target === e.currentTarget) {
+                                e.preventDefault();
+                                composer.current?.focus();
+                            }
+                        }}
+                    >
                         <textarea
                             ref={composer}
                             value={input}
-                            rows={2}
+                            rows={1}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={onComposerKey}
-                            placeholder={canAsk ? '要画什么？回车发送，Shift+回车换行' : '先连接模型，才能用文字指挥'}
+                            placeholder={canAsk ? '要画什么？' : '先连接模型，才能用文字指挥'}
                             disabled={!canAsk || busy}
                             aria-label="给 AI 的指令"
                         />
-                        {busy ? (
-                            <button type="button" className="button-stop" onClick={() => stopRef.current?.abort()}>
-                                停止
+                        <div className="composer-tools">
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={deepThinking}
+                                className="think-toggle"
+                                title="让模型先推理再动手。更适合复杂指令，但会慢很多。"
+                                onClick={() => {
+                                    saveThinking(!deepThinking);
+                                    setDeepThinking(!deepThinking);
+                                }}
+                            >
+                                <svg viewBox="0 0 16 16" aria-hidden>
+                                    <path d="M8 1.75a4.25 4.25 0 0 0-2.4 7.76c.4.27.65.72.65 1.2v.54h3.5v-.54c0-.48.25-.93.65-1.2A4.25 4.25 0 0 0 8 1.75ZM6.25 13h3.5M6.75 14.75h2.5" />
+                                </svg>
+                                深度思考
                             </button>
-                        ) : canAsk ? (
-                            <button type="submit" className="button-primary" disabled={!input.trim()}>
-                                发送
-                            </button>
-                        ) : (
-                            <button type="button" className="button-primary" onClick={() => setSettingsOpen(true)}>
-                                连接
-                            </button>
-                        )}
+                            {busy ? (
+                                <button type="button" className="send is-stop" onClick={() => stopRef.current?.abort()} aria-label="停止" title="停止">
+                                    <svg viewBox="0 0 16 16" aria-hidden>
+                                        <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+                                    </svg>
+                                </button>
+                            ) : canAsk ? (
+                                <button type="submit" className="send" disabled={!input.trim()} aria-label="发送" title="发送（回车）">
+                                    <svg viewBox="0 0 16 16" aria-hidden>
+                                        <path d="M8 13V3.5M3.75 7.5 8 3.25l4.25 4.25" />
+                                    </svg>
+                                </button>
+                            ) : (
+                                <button type="button" className="send-connect" onClick={() => setSettingsOpen(true)}>
+                                    连接模型
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <div className="composer-foot">
-                        <p className="composer-hint">AI 每轮修改算一步，{UNDO_KEYS} 整体撤回</p>
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={deepThinking}
-                            className="switch"
-                            title="让模型先推理再动手。更适合复杂指令，但会慢很多。"
-                            onClick={() => {
-                                saveThinking(!deepThinking);
-                                setDeepThinking(!deepThinking);
-                            }}
-                        >
-                            <span className="switch-track" aria-hidden />
-                            深度思考
-                        </button>
-                    </div>
+                    <p className="composer-hint">回车发送，Shift+回车换行 · AI 每轮修改算一步，{UNDO_KEYS} 整体撤回</p>
                 </form>
             </aside>
         </div>
