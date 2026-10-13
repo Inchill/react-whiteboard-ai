@@ -16,6 +16,9 @@ export type ShapeSummary = {
     y1?: number;
     x2?: number;
     y2?: number;
+    /** Lines and arrows that turn or curve: the points between start and end. */
+    via?: [number, number][];
+    curved?: true;
     fill?: FillStyle;
     text?: string;
     fontSize?: number;
@@ -54,6 +57,8 @@ export function summarizeShape(shape: Shape): ShapeSummary {
             s.y1 = round(shape.y1);
             s.x2 = round(shape.x2);
             s.y2 = round(shape.y2);
+            if (shape.via?.length) s.via = shape.via.map(([x, y]): [number, number] => [round(x), round(y)]);
+            if (shape.curved && shape.via?.length) s.curved = true;
             break;
         case 'text':
             s.text = shape.text;

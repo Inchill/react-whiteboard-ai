@@ -53,13 +53,14 @@ export function shapeBox(shape: Shape): Box {
             return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
         }
         case 'line':
-        case 'arrow':
-            return {
-                x: Math.min(shape.x1, shape.x2),
-                y: Math.min(shape.y1, shape.y2),
-                w: Math.abs(shape.x2 - shape.x1),
-                h: Math.abs(shape.y2 - shape.y1),
-            };
+        case 'arrow': {
+            // A curve can bulge a little past its points; close enough for layout.
+            const xs = [shape.x1, ...(shape.via ?? []).map((p) => p[0]), shape.x2];
+            const ys = [shape.y1, ...(shape.via ?? []).map((p) => p[1]), shape.y2];
+            const x = Math.min(...xs);
+            const y = Math.min(...ys);
+            return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+        }
         default: {
             // Boxes may carry negative w/h while drawing; normalize.
             const x = shape.w < 0 ? shape.x + shape.w : shape.x;
@@ -94,7 +95,14 @@ export function translateShape(shape: Shape, dx: number, dy: number): Shape {
             };
         case 'line':
         case 'arrow':
-            return { ...shape, x1: shape.x1 + dx, y1: shape.y1 + dy, x2: shape.x2 + dx, y2: shape.y2 + dy };
+            return {
+                ...shape,
+                x1: shape.x1 + dx,
+                y1: shape.y1 + dy,
+                x2: shape.x2 + dx,
+                y2: shape.y2 + dy,
+                ...(shape.via ? { via: shape.via.map(([x, y]): [number, number] => [x + dx, y + dy]) } : {}),
+            };
         default:
             return { ...shape, x: shape.x + dx, y: shape.y + dy };
     }

@@ -12,6 +12,7 @@ export const LIMITS = {
     fontSize: { min: 8, max: 200 },
     textLength: 2000,
     itemsPerOperation: 200,
+    viaPoints: 50,
     diagram: { nodes: 60, edges: 120, labelLength: 80, idLength: 40 },
     sketch: { pointsPerStroke: 200, parts: 30, partName: 40, subjectLength: 200, strokes: 120, pathLength: 4000, totalPathLength: 40000, width: { min: 1, max: 16 }, size: { min: 40, max: 2000 } },
 } as const;
@@ -118,12 +119,40 @@ class Checker {
 
 const STYLE_KEYS = ['color', 'strokeWidth', 'strokeStyle'] as const;
 const BOX_KEYS = ['type', 'x', 'y', 'w', 'h', 'fill', ...STYLE_KEYS] as const;
-const LINEAR_KEYS = ['type', 'x1', 'y1', 'x2', 'y2', ...STYLE_KEYS] as const;
+const LINEAR_KEYS = ['type', 'x1', 'y1', 'x2', 'y2', 'via', 'curved', ...STYLE_KEYS] as const;
 const TEXT_KEYS = ['type', 'x', 'y', 'text', 'fontSize', 'color'] as const;
 const PATCH_KEYS = [
     'id', 'dx', 'dy', 'color', 'strokeWidth', 'strokeStyle', 'fill',
-    'x', 'y', 'w', 'h', 'x1', 'y1', 'x2', 'y2', 'text', 'fontSize',
+    'x', 'y', 'w', 'h', 'x1', 'y1', 'x2', 'y2', 'via', 'curved', 'text', 'fontSize',
 ] as const;
+
+/** Points a line passes through: [[x, y], ...]. `allowEmpty` for updates, where [] straightens a line. */
+function parseVia(c: Checker, o: Obj, path: string, allowEmpty: boolean): [number, number][] | undefined {
+    const v = o.via;
+    if (v === undefined) return undefined;
+    if (!Array.isArray(v) || (!allowEmpty && v.length === 0)) {
+        c.fail(`${path}.via`, allowEmpty ? 'expected an array of [x, y] points' : 'expected at least one [x, y] point');
+        return undefined;
+    }
+    if (v.length > LIMITS.viaPoints) {
+        c.fail(`${path}.via`, `has more than ${LIMITS.viaPoints} points`);
+        return undefined;
+    }
+    const out: [number, number][] = [];
+    v.forEach((p, i) => {
+        if (Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= LIMITS.coordinate)) {
+            out.push([p[0], p[1]]);
+        } else c.fail(`${path}.via[${i}]`, 'expected [x, y] with two numbers');
+    });
+    return out.length === v.length ? out : undefined;
+}
+
+function parseBool(c: Checker, o: Obj, key: string, path: string): boolean | undefined {
+    const v = o[key];
+    if (v === undefined || typeof v === 'boolean') return v;
+    c.fail(`${path}.${key}`, 'expected true or false');
+    return undefined;
+}
 
 /** Drop keys whose value is undefined so outputs stay minimal and comparable. */
 const clean = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
@@ -160,11 +189,14 @@ function parseShapeInput(c: Checker, raw: unknown, path: string): ShapeInput | u
             y1: c.number(raw, 'y1', path, { required: true })!,
             x2: c.number(raw, 'x2', path, { required: true })!,
             y2: c.number(raw, 'y2', path, { required: true })!,
+            via: parseVia(c, raw, path, false),
+            curved: parseBool(c, raw, 'curved', path),
             ...style(),
         });
-        if (c.errors.length === before && raw.x1 === raw.x2 && raw.y1 === raw.y2) {
+        if (c.errors.length === before && raw.x1 === raw.x2 && raw.y1 === raw.y2 && raw.via === undefined) {
             c.fail(path, 'start and end points are the same');
         }
+        if (raw.curved === true && raw.via === undefined) c.fail(`${path}.curved`, 'needs via points to bend through');
     } else if (raw.type === 'text') {
         c.unknownKeys(raw, path, TEXT_KEYS);
         shape = clean({
@@ -205,6 +237,8 @@ function parsePatch(c: Checker, raw: unknown, path: string): ShapePatch | undefi
         y1: c.number(raw, 'y1', path),
         x2: c.number(raw, 'x2', path),
         y2: c.number(raw, 'y2', path),
+        via: parseVia(c, raw, path, true),
+        curved: parseBool(c, raw, 'curved', path),
         text: c.text(raw, 'text', path, false),
         fontSize: c.number(raw, 'fontSize', path, LIMITS.fontSize),
     });

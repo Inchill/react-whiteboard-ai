@@ -52,6 +52,8 @@ export function inputToShape(input: ShapeInput, id: string): Shape {
                 y1: input.y1,
                 x2: input.x2,
                 y2: input.y2,
+                ...(input.via?.length ? { via: input.via } : {}),
+                ...(input.curved && input.via?.length ? { curved: true } : {}),
                 color: input.color ?? DEFAULTS.color,
                 strokeWidth: input.strokeWidth ?? DEFAULTS.strokeWidth,
                 strokeStyle: input.strokeStyle ?? DEFAULTS.strokeStyle,
@@ -77,8 +79,8 @@ const PATCHABLE: Record<Shape['type'], readonly (keyof ShapePatch)[]> = {
     rect: ['x', 'y', 'w', 'h', 'fill', 'strokeWidth', 'strokeStyle'],
     ellipse: ['x', 'y', 'w', 'h', 'fill', 'strokeWidth', 'strokeStyle'],
     triangle: ['x', 'y', 'w', 'h', 'fill', 'strokeWidth', 'strokeStyle'],
-    line: ['x1', 'y1', 'x2', 'y2', 'strokeWidth', 'strokeStyle'],
-    arrow: ['x1', 'y1', 'x2', 'y2', 'strokeWidth', 'strokeStyle'],
+    line: ['x1', 'y1', 'x2', 'y2', 'via', 'curved', 'strokeWidth', 'strokeStyle'],
+    arrow: ['x1', 'y1', 'x2', 'y2', 'via', 'curved', 'strokeWidth', 'strokeStyle'],
     text: ['text', 'fontSize'],
     pen: ['strokeWidth'],
     highlighter: [],
@@ -96,6 +98,20 @@ export function patchShape(shape: Shape, patch: ShapePatch): Shape | string {
     let next = { ...shape, ...fields } as Shape;
     if (next.type === 'text' && (fields.text !== undefined || fields.fontSize !== undefined)) {
         next = { ...next, ...measureText(next.text, next.fontSize) };
+    }
+    if (next.type === 'line' || next.type === 'arrow') {
+        // An empty via makes the line straight again; a curve needs points to pass through.
+        if (!next.via?.length) {
+            if (fields.curved) return 'curved needs via points to bend through';
+            const { via: _via, curved: _curved, ...straight } = next;
+            void _via;
+            void _curved;
+            next = straight;
+        } else if (next.curved === false) {
+            const { curved: _curved, ...plain } = next;
+            void _curved;
+            next = plain;
+        }
     }
     if (dx || dy) next = translateShape(next, dx ?? 0, dy ?? 0);
     return next;
