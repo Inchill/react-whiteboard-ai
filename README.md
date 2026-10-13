@@ -252,7 +252,7 @@ pnpm preview:demo   # check the build locally
 - **Claude** allows browser calls (the page sends the required opt-in header).
 - **Other services**: whether they accept calls from web pages is up to each one. If one refuses (a CORS error), the page says so, and visitors can enter a proxy of their own as the endpoint.
 
-The repository publishes it with `.github/workflows/deploy.yml`: every push to `main` runs lint, type checks and tests, builds `dist-demo` and deploys it to GitHub Pages; it can also be run by hand from the Actions tab. A demo that fails its checks is not published.
+The repository publishes it with `.github/workflows/deploy.yml`: every push to `main` runs lint, type checks and tests, builds `dist-demo` and deploys it to GitHub Pages; it can also be run by hand from the Actions tab. A demo that fails its checks is not published. `.env.local` is for local development only: the static build never reads `.env` files, the page has no code path to the dev server, and the workflow refuses to publish a page that refers to either.
 
 One-time setup: in the repository settings, under **Pages → Build and deployment → Source**, choose **GitHub Actions**. The page is then at `https://<owner>.github.io/react-whiteboard-ai/`.
 

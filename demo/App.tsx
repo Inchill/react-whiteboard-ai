@@ -33,11 +33,12 @@ const MAX_ROUNDS = 5;
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
 
-/**
+/*
  * A built page (for GitHub Pages or any static host) has no dev server to proxy through, so it
- * calls the provider straight from the browser with the key the visitor entered.
+ * calls the provider straight from the browser with the key the visitor entered. Everything that
+ * talks to the dev server, or mentions .env.local, sits behind a literal `import.meta.env.DEV`
+ * check, so the build drops it: the published page has no way to use the developer's key.
  */
-const DIRECT = !import.meta.env.DEV;
 
 export function App() {
     const board = useRef<WhiteboardHandle>(null);
@@ -80,7 +81,7 @@ export function App() {
     const canAsk = Boolean(settings || serverModel);
 
     useEffect(() => {
-        if (DIRECT) return;
+        if (!import.meta.env.DEV) return;
         fetch('/api/status')
             .then((r) => r.json())
             .then((s) => setServerModel(s && typeof s.service === 'string' && typeof s.model === 'string' ? s : null))
@@ -178,19 +179,19 @@ export function App() {
         try {
             for (let round = 0; round < MAX_ROUNDS; round++) {
                 thinking.current = { start: 0, end: 0 };
-                const res =
-                    DIRECT && settings
-                        ? await callModel(settings, { messages, thinking: deepThinking, signal: stop.signal, fromBrowser: true })
-                        : await fetch('/api/ai', {
-                            method: 'POST',
-                            signal: stop.signal,
-                            headers: {
-                                'content-type': 'application/json',
-                                'x-ai-thinking': deepThinking ? 'on' : 'off',
-                                ...(settings ? settingsHeaders(settings) : {}),
-                            },
-                            body: JSON.stringify({ messages }),
-                        });
+                const res = import.meta.env.DEV
+                    ? await fetch('/api/ai', {
+                        method: 'POST',
+                        signal: stop.signal,
+                        headers: {
+                            'content-type': 'application/json',
+                            'x-ai-thinking': deepThinking ? 'on' : 'off',
+                            ...(settings ? settingsHeaders(settings) : {}),
+                        },
+                        body: JSON.stringify({ messages }),
+                    })
+                    : // canAsk: without the dev server, only the visitor's own settings can ask.
+                    await callModel(settings!, { messages, thinking: deepThinking, signal: stop.signal, fromBrowser: true });
                 if (!res.ok || !res.body) {
                     const data = await res.json().catch(() => ({}));
                     const detail = data.error?.message ?? data.error ?? `HTTP ${res.status}`;
@@ -244,7 +245,7 @@ export function App() {
             }
         } catch (err) {
             if (stop.signal.aborted) push({ kind: 'say', text: '已停止。这一轮还没写完的修改没有画到白板上。' });
-            else if (DIRECT && err instanceof TypeError && settings) {
+            else if (!import.meta.env.DEV && err instanceof TypeError && settings) {
                 // A fetch that fails outright from a page is a blocked cross-origin request or no network.
                 push({
                     kind: 'error',
@@ -293,7 +294,7 @@ export function App() {
                             <>
                                 <strong>{connection.service}</strong>
                                 <span className="connection-model">{connection.model}</span>
-                                {!settings && <span className="connection-model">（.env.local）</span>}
+                                {import.meta.env.DEV && !settings && <span className="connection-model">（.env.local）</span>}
                             </>
                         ) : (
                             <strong>连接模型</strong>
@@ -304,7 +305,6 @@ export function App() {
                             <SettingsPanel
                                 settings={settings}
                                 hasServerKey={Boolean(serverModel)}
-                                direct={DIRECT}
                                 onSave={(s) => {
                                     saveSettings(s);
                                     setSettings(s);
