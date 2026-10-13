@@ -19,8 +19,8 @@ It never calls a model and never sees an API key. You send the request from your
 | --- | --- |
 | `add_diagram` | Boxes joined by arrows: flowcharts, architecture and layer diagrams, org charts, trees, state machines, pipelines. The model gives only nodes, layers and edges. Layout, box sizes, colors and arrow routing are automatic |
 | `draw_sketch` | Line drawings with curves: characters, animals, avatars, plants, objects. The model plans the parts and gives points or SVG paths, which become hand-drawn pressure pen strokes |
-| `add_shapes` | Add rectangles, ellipses, triangles, lines, arrows and text |
-| `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle or edit text by id |
+| `add_shapes` | Add rectangles, ellipses, triangles, text, and lines and arrows: straight, elbow (`via` corners) or curved |
+| `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle, reroute lines (`via`, `curved`) or edit text by id |
 | `delete_shapes` | Delete by id |
 
 Anything the model draws without coordinates is placed to the right of what is already on the board.
@@ -50,7 +50,7 @@ Anything the model draws without coordinates is placed to the right of what is a
 ```
 
 - **Rows**: with `layer` names, each layer is a row with a labeled band, in order of first use. Without them, rows follow the arrows. `direction: "right"` lays it out left to right, for pipelines and timelines.
-- **Arrows**: arrows that skip rows are routed around boxes. Many-to-many links between two rows share a bus. Links within a row and links pointing back up (loops, retries) get their own routes.
+- **Arrows**: each link is a single arrow that turns at right angles through `via` points, so it selects, moves and deletes as one shape. Arrows that skip rows are routed around boxes. Many-to-many links between two rows share a bus. Links within a row and links pointing back up (loops, retries) get their own routes.
 - **Shapes**: `shape: "ellipse"` is for the start and end of a flow. Edge labels such as "是" / "否" sit on the arrow.
 
 The tool result maps each node id to the box drawn for it (`nodes: { gw: "s12", … }`), so the model can edit the diagram in a later turn. Limits: 60 nodes, 120 edges.
@@ -93,7 +93,7 @@ It draws lines only, with no fills. The system prompt teaches a drawing method w
 pnpm add @inchill/react-whiteboard-ai @inchill/react-whiteboard
 ```
 
-Requires React 18 or later and `@inchill/react-whiteboard` 1.0 or later.
+Requires React 18 or later and `@inchill/react-whiteboard` 1.1 or later (for lines and arrows that turn or curve).
 
 ## Use
 
