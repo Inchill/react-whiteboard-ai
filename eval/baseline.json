@@ -2,25 +2,25 @@
   "arch-right": {
     "nodes": 16,
     "edges": 21,
-    "crossings": 7,
+    "crossings": 3,
     "edgeThroughBox": 0,
     "labelOverlaps": 0,
     "closeParallels": 0,
-    "bendsPerEdge": 0.76,
-    "edgeLength": 243,
+    "bendsPerEdge": 0.67,
+    "edgeLength": 236,
     "width": 1464,
-    "height": 605
+    "height": 616
   },
   "arch-down": {
     "nodes": 13,
     "edges": 18,
-    "crossings": 5,
+    "crossings": 2,
     "edgeThroughBox": 0,
     "labelOverlaps": 0,
     "closeParallels": 0,
-    "bendsPerEdge": 1,
-    "edgeLength": 231,
-    "width": 1115,
+    "bendsPerEdge": 1.33,
+    "edgeLength": 236,
+    "width": 1078,
     "height": 721
   },
   "leave-flow": {
@@ -38,13 +38,13 @@
   "order-flow": {
     "nodes": 11,
     "edges": 17,
-    "crossings": 2,
+    "crossings": 1,
     "edgeThroughBox": 0,
     "labelOverlaps": 0,
     "closeParallels": 0,
-    "bendsPerEdge": 0.35,
-    "edgeLength": 211,
-    "width": 767,
+    "bendsPerEdge": 0.41,
+    "edgeLength": 213,
+    "width": 692,
     "height": 1381
   },
   "er": {
