@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { describeCall } from './describeCall';
@@ -33,11 +33,12 @@ const MAX_ROUNDS = 5;
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
 
-/**
+/*
  * A built page (for GitHub Pages or any static host) has no dev server to proxy through, so it
- * calls the provider straight from the browser with the key the visitor entered.
+ * calls the provider straight from the browser with the key the visitor entered. Everything that
+ * talks to the dev server, or mentions .env.local, sits behind a literal `import.meta.env.DEV`
+ * check, so the build drops it: the published page has no way to use the developer's key.
  */
-const DIRECT = !import.meta.env.DEV;
 
 export function App() {
     const board = useRef<WhiteboardHandle>(null);
@@ -61,7 +62,9 @@ export function App() {
     const [deepThinking, setDeepThinking] = useState(loadThinking);
     const [exampleGroup, setExampleGroup] = useState(loadExampleGroup);
     const examples = EXAMPLE_GROUPS.find((g) => g.id === exampleGroup) ?? EXAMPLE_GROUPS[0];
-    const logEnd = useRef<HTMLDivElement>(null);
+    const logRef = useRef<HTMLElement>(null);
+    // Follow new entries while the reader is at the bottom of the log; scrolling up to read stops it.
+    const followLog = useRef(true);
     const composer = useRef<HTMLTextAreaElement>(null);
     // Bumped after each AI turn; the effect below fits the view once React has rendered the new shapes.
     const [fitRequest, setFitRequest] = useState(0);
@@ -78,18 +81,36 @@ export function App() {
     const canAsk = Boolean(settings || serverModel);
 
     useEffect(() => {
-        if (DIRECT) return;
+        if (!import.meta.env.DEV) return;
         fetch('/api/status')
             .then((r) => r.json())
             .then((s) => setServerModel(s && typeof s.service === 'string' && typeof s.model === 'string' ? s : null))
             .catch(() => setServerModel(null));
     }, []);
 
-    // Braces matter: newer browsers return a Promise from scrollIntoView, and React treats
-    // any non-function return value of an effect as a mistake.
+    // Keep the log pinned to its bottom while following: after every change to its content, and
+    // whenever its box changes size (the examples above the composer come and go with each turn).
+    // Only the log scrolls, never the page around it, and it lands exactly at the end.
+    const stickToBottom = () => {
+        const el = logRef.current;
+        if (el && followLog.current) el.scrollTop = el.scrollHeight;
+    };
+    useLayoutEffect(stickToBottom, [log, busy, live]);
     useEffect(() => {
-        logEnd.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-    }, [log, busy, live]);
+        const el = logRef.current;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        const watch = new ResizeObserver(stickToBottom);
+        watch.observe(el);
+        return () => watch.disconnect();
+    }, []);
+
+    // The composer grows with its text, up to a few lines, then scrolls.
+    useLayoutEffect(() => {
+        const el = composer.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+    }, [input]);
 
     useEffect(() => {
         if (fitRequest) board.current?.zoomToFit();
@@ -137,6 +158,7 @@ export function App() {
             return;
         }
         if (!example) setInput('');
+        followLog.current = true;
         setBusy(true);
         push({ kind: 'prompt', text: prompt, example });
         thoughtOpenRef.current = false;
@@ -157,19 +179,19 @@ export function App() {
         try {
             for (let round = 0; round < MAX_ROUNDS; round++) {
                 thinking.current = { start: 0, end: 0 };
-                const res =
-                    DIRECT && settings
-                        ? await callModel(settings, { messages, thinking: deepThinking, signal: stop.signal, fromBrowser: true })
-                        : await fetch('/api/ai', {
-                            method: 'POST',
-                            signal: stop.signal,
-                            headers: {
-                                'content-type': 'application/json',
-                                'x-ai-thinking': deepThinking ? 'on' : 'off',
-                                ...(settings ? settingsHeaders(settings) : {}),
-                            },
-                            body: JSON.stringify({ messages }),
-                        });
+                const res = import.meta.env.DEV
+                    ? await fetch('/api/ai', {
+                        method: 'POST',
+                        signal: stop.signal,
+                        headers: {
+                            'content-type': 'application/json',
+                            'x-ai-thinking': deepThinking ? 'on' : 'off',
+                            ...(settings ? settingsHeaders(settings) : {}),
+                        },
+                        body: JSON.stringify({ messages }),
+                    })
+                    : // canAsk: without the dev server, only the visitor's own settings can ask.
+                    await callModel(settings!, { messages, thinking: deepThinking, signal: stop.signal, fromBrowser: true });
                 if (!res.ok || !res.body) {
                     const data = await res.json().catch(() => ({}));
                     const detail = data.error?.message ?? data.error ?? `HTTP ${res.status}`;
@@ -223,7 +245,7 @@ export function App() {
             }
         } catch (err) {
             if (stop.signal.aborted) push({ kind: 'say', text: '已停止。这一轮还没写完的修改没有画到白板上。' });
-            else if (DIRECT && err instanceof TypeError && settings) {
+            else if (!import.meta.env.DEV && err instanceof TypeError && settings) {
                 // A fetch that fails outright from a page is a blocked cross-origin request or no network.
                 push({
                     kind: 'error',
@@ -272,7 +294,7 @@ export function App() {
                             <>
                                 <strong>{connection.service}</strong>
                                 <span className="connection-model">{connection.model}</span>
-                                {!settings && <span className="connection-model">（.env.local）</span>}
+                                {import.meta.env.DEV && !settings && <span className="connection-model">（.env.local）</span>}
                             </>
                         ) : (
                             <strong>连接模型</strong>
@@ -283,7 +305,6 @@ export function App() {
                             <SettingsPanel
                                 settings={settings}
                                 hasServerKey={Boolean(serverModel)}
-                                direct={DIRECT}
                                 onSave={(s) => {
                                     saveSettings(s);
                                     setSettings(s);
@@ -301,7 +322,16 @@ export function App() {
                     )}
                 </header>
 
-                <section className="log" aria-live="polite" aria-label="操作记录">
+                <section
+                    ref={logRef}
+                    className="log"
+                    aria-live="polite"
+                    aria-label="操作记录"
+                    onScroll={(e) => {
+                        const el = e.currentTarget;
+                        followLog.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+                    }}
+                >
                     {log.length === 0 && (
                         <div className="log-empty">
                             <p className="log-empty-title">告诉我要在白板上画什么</p>
@@ -328,7 +358,6 @@ export function App() {
                             <span className="trim">等待模型回复</span>
                         </p>
                     )}
-                    <div ref={logEnd} />
                 </section>
 
                 <form
@@ -368,48 +397,63 @@ export function App() {
                             {examples.hint && !deepThinking && <p className="examples-hint">{examples.hint}</p>}
                         </div>
                     )}
-                    <div className="composer-box">
+                    <div
+                        className={`composer-box${!canAsk ? ' is-off' : ''}`}
+                        // A click anywhere on the box (not on its buttons) puts the cursor in the text.
+                        onMouseDown={(e) => {
+                            if (e.target === e.currentTarget) {
+                                e.preventDefault();
+                                composer.current?.focus();
+                            }
+                        }}
+                    >
                         <textarea
                             ref={composer}
                             value={input}
-                            rows={2}
+                            rows={1}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={onComposerKey}
-                            placeholder={canAsk ? '要画什么？回车发送，Shift+回车换行' : '先连接模型，才能用文字指挥'}
+                            placeholder={canAsk ? '要画什么？' : '先连接模型，才能用文字指挥'}
                             disabled={!canAsk || busy}
                             aria-label="给 AI 的指令"
                         />
-                        {busy ? (
-                            <button type="button" className="button-stop" onClick={() => stopRef.current?.abort()}>
-                                停止
+                        <div className="composer-tools">
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={deepThinking}
+                                className="think-toggle"
+                                title="让模型先推理再动手。更适合复杂指令，但会慢很多。"
+                                onClick={() => {
+                                    saveThinking(!deepThinking);
+                                    setDeepThinking(!deepThinking);
+                                }}
+                            >
+                                <svg viewBox="0 0 16 16" aria-hidden>
+                                    <path d="M8 1.75a4.25 4.25 0 0 0-2.4 7.76c.4.27.65.72.65 1.2v.54h3.5v-.54c0-.48.25-.93.65-1.2A4.25 4.25 0 0 0 8 1.75ZM6.25 13h3.5M6.75 14.75h2.5" />
+                                </svg>
+                                深度思考
                             </button>
-                        ) : canAsk ? (
-                            <button type="submit" className="button-primary" disabled={!input.trim()}>
-                                发送
-                            </button>
-                        ) : (
-                            <button type="button" className="button-primary" onClick={() => setSettingsOpen(true)}>
-                                连接
-                            </button>
-                        )}
+                            {busy ? (
+                                <button type="button" className="send is-stop" onClick={() => stopRef.current?.abort()} aria-label="停止" title="停止">
+                                    <svg viewBox="0 0 16 16" aria-hidden>
+                                        <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+                                    </svg>
+                                </button>
+                            ) : canAsk ? (
+                                <button type="submit" className="send" disabled={!input.trim()} aria-label="发送" title="发送（回车）">
+                                    <svg viewBox="0 0 16 16" aria-hidden>
+                                        <path d="M8 13V3.5M3.75 7.5 8 3.25l4.25 4.25" />
+                                    </svg>
+                                </button>
+                            ) : (
+                                <button type="button" className="send-connect" onClick={() => setSettingsOpen(true)}>
+                                    连接模型
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <div className="composer-foot">
-                        <p className="composer-hint">AI 每轮修改算一步，{UNDO_KEYS} 整体撤回</p>
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={deepThinking}
-                            className="switch"
-                            title="让模型先推理再动手。更适合复杂指令，但会慢很多。"
-                            onClick={() => {
-                                saveThinking(!deepThinking);
-                                setDeepThinking(!deepThinking);
-                            }}
-                        >
-                            <span className="switch-track" aria-hidden />
-                            深度思考
-                        </button>
-                    </div>
+                    <p className="composer-hint">回车发送，Shift+回车换行 · AI 每轮修改算一步，{UNDO_KEYS} 整体撤回</p>
                 </form>
             </aside>
         </div>

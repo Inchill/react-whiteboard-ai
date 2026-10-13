@@ -32,6 +32,12 @@ const boxShape = {
     additionalProperties: false,
 };
 
+const viaPoints = {
+    type: 'array',
+    maxItems: LIMITS.viaPoints,
+    items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
+};
+
 const linearShape = {
     type: 'object',
     properties: {
@@ -40,6 +46,14 @@ const linearShape = {
         y1: num('Start y.'),
         x2: num('End x.'),
         y2: num('End y.'),
+        via: {
+            ...viaPoints,
+            minItems: 1,
+            description:
+                'Optional points the line passes through between start and end, e.g. [[200, 100], [200, 300]]. Corners at right ' +
+                'angles make an elbow connector; omit for a straight line.',
+        },
+        curved: { type: 'boolean', description: 'With via: a smooth curve through the points instead of straight segments.' },
         color,
         strokeWidth,
         strokeStyle,
@@ -238,7 +252,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         description:
             'Change existing shapes by id. Use dx/dy to move any shape, including freehand strokes. ' +
             'Only set fields that apply to the shape: fill and x/y/w/h for rect, ellipse and triangle; ' +
-            'x1/y1/x2/y2 for line and arrow; text and fontSize for text.',
+            'x1/y1/x2/y2, via and curved for line and arrow; text and fontSize for text.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -264,6 +278,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
                             y1: num('New start y.'),
                             x2: num('New end x.'),
                             y2: num('New end y.'),
+                            via: { ...viaPoints, description: 'New points between start and end; [] makes the line straight.' },
+                            curved: { type: 'boolean' },
                             text: { type: 'string', maxLength: LIMITS.textLength },
                             fontSize,
                         },

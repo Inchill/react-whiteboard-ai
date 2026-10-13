@@ -50,7 +50,7 @@ class EventTally {
  * AI_BASE_URL, AI_API_KEY and AI_MODEL. Older files with DEEPSEEK_API_KEY or ANTHROPIC_API_KEY
  * (and AI_PROVIDER to choose between them) still work.
  */
-function targetFromEnv(env: Record<string, string>): Target | null {
+export function targetFromEnv(env: Record<string, string>): Target | null {
     if (env.AI_BASE_URL && env.AI_API_KEY && env.AI_MODEL) return { baseUrl: env.AI_BASE_URL, key: env.AI_API_KEY, model: env.AI_MODEL };
     const legacy = env.AI_PROVIDER || (env.ANTHROPIC_API_KEY ? 'anthropic' : env.DEEPSEEK_API_KEY ? 'deepseek' : '');
     if (legacy === 'deepseek' && env.DEEPSEEK_API_KEY) {

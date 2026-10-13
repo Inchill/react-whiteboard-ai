@@ -6,16 +6,14 @@ import type { AISettings } from './settings';
 
 type Props = {
     settings: AISettings | null;
-    /** True when .env.local already provides a key. */
+    /** True when .env.local already provides a key (dev server only). */
     hasServerKey: boolean;
-    /** The page calls the model from the browser (static hosting) rather than through the dev server. */
-    direct: boolean;
     onSave: (s: AISettings) => void;
     onClear: () => void;
     onClose: () => void;
 };
 
-export function SettingsPanel({ settings, hasServerKey, direct, onSave, onClear, onClose }: Props) {
+export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose }: Props) {
     const id = useId();
     const [baseUrl, setBaseUrl] = useState(settings?.baseUrl ?? '');
     const [key, setKey] = useState('');
@@ -75,9 +73,9 @@ export function SettingsPanel({ settings, hasServerKey, direct, onSave, onClear,
             </label>
             <p className="settings-note">
                 {remember ? 'key 会留在这个浏览器里，下次打开还能用。' : 'key 只留在这个标签页，关掉就清除。'}
-                {direct
-                    ? `请求从你的浏览器直接发到 ${baseUrl.trim() ? serviceName(baseUrl, custom) : '这个接口'}，不经过其他服务器。`
-                    : '请求由本地开发服务器转发，它不保存也不打印 key。'}
+                {import.meta.env.DEV
+                    ? '请求由本地开发服务器转发，它不保存也不打印 key。'
+                    : `请求从你的浏览器直接发到 ${baseUrl.trim() ? serviceName(baseUrl, custom) : '这个接口'}，不经过其他服务器。`}
             </p>
 
             <div className="settings-actions">
@@ -89,7 +87,7 @@ export function SettingsPanel({ settings, hasServerKey, direct, onSave, onClear,
                 </button>
                 {settings && (
                     <button type="button" className="button-quiet" onClick={onClear}>
-                        {hasServerKey ? '清除，改用 .env.local' : '清除'}
+                        {import.meta.env.DEV && hasServerKey ? '清除，改用 .env.local' : '清除'}
                     </button>
                 )}
             </div>

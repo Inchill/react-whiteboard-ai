@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { executeToolCalls, formatToolResult, layoutDiagram, parseOperation, type DiagramInput } from '../src';
 import type { Shape } from '../src/types';
+import { DIAGRAM_CASES } from '../eval/cases/diagrams';
+import { measureLayout } from '../eval/metrics';
 
 const ids = () => {
     let n = 0;
@@ -9,6 +11,18 @@ const ids = () => {
 
 type Box = { x: number; y: number; w: number; h: number };
 type Linear = Extract<Shape, { type: 'line' | 'arrow' }>;
+
+type Seg = { x1: number; y1: number; x2: number; y2: number; line: Linear; last: boolean };
+
+/** Every straight segment of every line and arrow, through its via points. */
+function segmentsOf(shapes: Shape[]): Seg[] {
+    return shapes
+        .filter((s): s is Linear => s.type === 'line' || s.type === 'arrow')
+        .flatMap((line) => {
+            const pts = [[line.x1, line.y1], ...(line.via ?? []), [line.x2, line.y2]];
+            return pts.slice(1).map(([x2, y2], i) => ({ x1: pts[i][0], y1: pts[i][1], x2, y2, line, last: i === pts.length - 2 }));
+        });
+}
 
 function boxesOf(input: DiagramInput) {
     const { shapes, nodes } = layoutDiagram(input, { createId: ids() });
@@ -106,10 +120,13 @@ describe('layoutDiagram', () => {
         });
         expect(box('in').y).toBeLessThan(box('check').y);
         expect(box('check').y).toBeLessThan(box('retry').y);
+        // One dashed arrow that turns around the side.
         const back = shapes.filter((s): s is Linear => (s.type === 'line' || s.type === 'arrow') && s.strokeStyle === 'dashed');
-        expect(back).toHaveLength(3);
+        expect(back).toHaveLength(1);
+        expect(back[0].type).toBe('arrow');
+        expect(back[0].via).toHaveLength(2);
         // Enters the box it returns to from the right, pointing left.
-        const head = back.find((s) => s.type === 'arrow')!;
+        const head = segmentsOf(back).find((g) => g.last)!;
         expect(head.x2).toBeCloseTo(box('in').x + box('in').w + 4);
         expect(head.x2).toBeLessThan(head.x1);
         expect(shapes.some((s) => s.type === 'text' && s.text === '失败')).toBe(true);
@@ -150,7 +167,7 @@ describe('layoutDiagram', () => {
             ],
         });
         const boxes = Object.keys(nodes).map(box);
-        const legs = shapes.filter((s): s is Linear => s.type === 'line' || s.type === 'arrow');
+        const legs = segmentsOf(shapes);
         for (const leg of legs) {
             for (const b of boxes) {
                 // Sample along each leg; no point may sit strictly inside a box.
@@ -163,14 +180,34 @@ describe('layoutDiagram', () => {
         }
         // It arrives at the database straight from above, inside the box's width.
         const db = box('db');
-        const into = legs.filter((l) => l.type === 'arrow' && Math.abs(l.y2 - (db.y - 4)) < 0.01);
+        const into = legs.filter((l) => l.last && l.line.type === 'arrow' && Math.abs(l.y2 - (db.y - 4)) < 0.01);
         expect(into).toHaveLength(1);
         expect(into[0].x1).toBe(into[0].x2);
         expect(into[0].x2).toBeGreaterThan(db.x);
         expect(into[0].x2).toBeLessThan(db.x + db.w);
     });
 
-    it('draws same-layer links around boxes in between, and keeps a pair apart', () => {
+    it('merges several links into one box into a single arrow, but keeps labelled links apart', () => {
+        const { shapes, box } = boxesOf({
+            nodes: [
+                ...['a', 'b', 'c'].map((id) => ({ id, label: id, layer: 'top' })),
+                ...['t', 'u'].map((id) => ({ id, label: id, layer: 'bottom' })),
+            ],
+            edges: [
+                { from: 'a', to: 't' },
+                { from: 'b', to: 't' },
+                { from: 'c', to: 't' },
+                { from: 'c', to: 'u' },
+                { from: 'b', to: 'u', label: '写入' },
+            ],
+        });
+        const into = (id: string) => shapes.filter((s) => s.type === 'arrow' && Math.abs(s.y2 - (box(id).y - 4)) < 1 && s.x2 > box(id).x && s.x2 < box(id).x + box(id).w);
+        expect(into('t')).toHaveLength(1);
+        // u has one plain link and one labelled link: two arrows of their own.
+        expect(into('u')).toHaveLength(2);
+    });
+
+    it('draws same-layer links straight between neighbors and around boxes in between', () => {
         const { shapes, box } = boxesOf({
             nodes: ['a', 'b', 'c'].map((id) => ({ id, label: id, layer: 'one' })),
             edges: [
@@ -179,10 +216,13 @@ describe('layoutDiagram', () => {
                 { from: 'b', to: 'a', label: '回复' },
             ],
         });
-        const ys = shapes.filter((s): s is Linear => s.type === 'line' && s.y1 === s.y2).map((s) => s.y1);
-        // Three detours, each on its own height above the row.
-        expect(new Set(ys).size).toBe(3);
-        for (const y of ys) expect(y).toBeLessThan(box('a').y);
+        // a and b sit side by side: two parallel straight arrows. a → c goes around b.
+        const row = box('a').y;
+        const horizontal = segmentsOf(shapes).filter((g) => g.y1 === g.y2);
+        const between = horizontal.filter((g) => g.y1 > row && g.y1 < row + box('a').h);
+        expect(new Set(between.map((g) => g.y1)).size).toBe(2);
+        expect(horizontal.filter((g) => g.y1 < row || g.y1 > row + box('a').h)).toHaveLength(1);
+        expect(shapes.filter((s) => s.type === 'line')).toHaveLength(0);
     });
 
     it('lays layers out left to right with direction "right"', () => {
@@ -244,5 +284,30 @@ describe('add_diagram tool', () => {
         expect(results[0].ok).toBe(true);
         expect(Object.keys(results[0].nodes!)).toEqual(['x', 'y']);
         expect(formatToolResult(results[0])).toMatch(/^diagram drawn; node boxes: x=\S+, y=\S+/);
+    });
+});
+
+describe('layout quality over the benchmark cases', () => {
+    const cases = DIAGRAM_CASES.map((c) => ({ id: c.id, shapes: layoutDiagram(c.input, { createId: ids() }).shapes }));
+
+    it('draws every line straight across or along, never at a slant', () => {
+        for (const { id, shapes } of cases) {
+            for (const g of segmentsOf(shapes)) {
+                const slanted = Math.abs(g.x1 - g.x2) > 0.01 && Math.abs(g.y1 - g.y2) > 0.01;
+                expect(slanted, `${id}: (${g.x1}, ${g.y1}) → (${g.x2}, ${g.y2})`).toBe(false);
+            }
+        }
+    });
+
+    // Cases that still have these defects; remove an id once its layout is fixed.
+    const knownIssues = new Set(['state-machine', 'dev-loops']);
+
+    it('keeps edge labels clear of boxes, lines and each other, and lines apart', () => {
+        for (const { id, shapes } of cases.filter((c) => !knownIssues.has(c.id))) {
+            const m = measureLayout(shapes);
+            expect(m.labelOverlaps, id).toBe(0);
+            expect(m.closeParallels, id).toBe(0);
+            expect(m.edgeThroughBox, id).toBe(0);
+        }
     });
 });

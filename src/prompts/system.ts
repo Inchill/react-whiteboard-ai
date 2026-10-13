@@ -17,13 +17,14 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
         'The board:',
         '- An infinite canvas in world units. x grows to the right, y grows downward.',
         '- The current board is given as JSON: `bounds` covers all content, `shapes` lists each shape in paint order (later ones are on top).',
-        '- Each shape has an `id`, a `type` and its bounding box (x, y, w, h). Lines and arrows also have their end points; text has its content.',
+        '- Each shape has an `id`, a `type` and its bounding box (x, y, w, h). Lines and arrows also have their end points, and `via` points when they turn or curve; text has its content.',
         '- Freehand strokes (`pen`, `highlighter`) are summarized by their box only. You can move, recolor or delete them but not reshape them.',
         '- Colors are "ink" (follows the light or dark theme; use it by default) or hex colors. Good accents: #e03131 red, #f08c00 orange, #2f9e44 green, #1971c2 blue, #7048e8 violet.',
         '',
         'What you can draw:',
         '- Rectangles, ellipses and triangles (apex up), each with no fill, a translucent fill or a solid fill.',
-        '- Straight lines and arrows, solid, dashed or dotted. There are no curves, polygons or rotation.',
+        '- Lines and arrows, solid, dashed or dotted: straight, turning at right angles through `via` points (elbow connectors), or ' +
+            'a smooth curve through them (`curved: true`). There are no polygons or rotation.',
         '- Text in one typeface, any size and color.',
         '- Hand-drawn line drawings with curves, through draw_sketch.',
         '',
@@ -68,7 +69,9 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
             'Boxes in a row share one width (wide enough for the longest label) and one center line.',
         '- Arrows and lines: strokeWidth 2 in "ink"; short labels beside them at fontSize 16.',
         '- Keep arrows straight and vertical or horizontal: put a box directly below (or beside) the box it connects to, with the same ' +
-            'center x (or y). Spread several targets evenly and symmetrically under their source.',
+            'center x (or y). Spread several targets evenly and symmetrically under their source. When two boxes are not in line, ' +
+            'connect them with one arrow that turns at right angles (`via` at the corners), never a diagonal and never several ' +
+            'separate lines. Use `curved` for loose, informal links such as callouts and annotations.',
         '- Never let arrows cross. Reorder boxes first. When many boxes connect to many others, draw a shared horizontal line ' +
             'between the rows and short vertical arrows from it, instead of one diagonal arrow per pair.',
         '- Layered diagrams: draw each layer as a wide band first (rect, fill "semi", a light color, strokeWidth 1, strokeStyle "dashed") ' +

@@ -30,6 +30,10 @@ export type LinearInput = StyleInput & {
     y1: number;
     x2: number;
     y2: number;
+    /** Points the line passes through between start and end: corners of an elbow, or a curve's path. */
+    via?: [number, number][];
+    /** A smooth curve through the points instead of straight segments. Needs `via`. */
+    curved?: boolean;
 };
 
 export type TextInput = {
@@ -65,6 +69,9 @@ export type ShapePatch = {
     y1?: number;
     x2?: number;
     y2?: number;
+    /** Lines and arrows only: new points between start and end; [] makes the line straight. */
+    via?: [number, number][];
+    curved?: boolean;
     /** Text only. */
     text?: string;
     fontSize?: number;

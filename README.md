@@ -19,8 +19,8 @@ It never calls a model and never sees an API key. You send the request from your
 | --- | --- |
 | `add_diagram` | Boxes joined by arrows: flowcharts, architecture and layer diagrams, org charts, trees, state machines, pipelines. The model gives only nodes, layers and edges. Layout, box sizes, colors and arrow routing are automatic |
 | `draw_sketch` | Line drawings with curves: characters, animals, avatars, plants, objects. The model plans the parts and gives points or SVG paths, which become hand-drawn pressure pen strokes |
-| `add_shapes` | Add rectangles, ellipses, triangles, lines, arrows and text |
-| `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle or edit text by id |
+| `add_shapes` | Add rectangles, ellipses, triangles, text, and lines and arrows: straight, elbow (`via` corners) or curved |
+| `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle, reroute lines (`via`, `curved`) or edit text by id |
 | `delete_shapes` | Delete by id |
 
 Anything the model draws without coordinates is placed to the right of what is already on the board.
@@ -50,7 +50,7 @@ Anything the model draws without coordinates is placed to the right of what is a
 ```
 
 - **Rows**: with `layer` names, each layer is a row with a labeled band, in order of first use. Without them, rows follow the arrows. `direction: "right"` lays it out left to right, for pipelines and timelines.
-- **Arrows**: arrows that skip rows are routed around boxes. Many-to-many links between two rows share a bus. Links within a row and links pointing back up (loops, retries) get their own routes.
+- **Arrows**: each link is a single arrow that turns at right angles through `via` points, so it selects, moves and deletes as one shape. Arrows that skip rows are routed around boxes. Many-to-many links between two rows share a bus. Links within a row and links pointing back up (loops, retries) get their own routes.
 - **Shapes**: `shape: "ellipse"` is for the start and end of a flow. Edge labels such as "是" / "否" sit on the arrow.
 
 The tool result maps each node id to the box drawn for it (`nodes: { gw: "s12", … }`), so the model can edit the diagram in a later turn. Limits: 60 nodes, 120 edges.
@@ -93,7 +93,7 @@ It draws lines only, with no fills. The system prompt teaches a drawing method w
 pnpm add @inchill/react-whiteboard-ai @inchill/react-whiteboard
 ```
 
-Requires React 18 or later and `@inchill/react-whiteboard` 1.0 or later.
+Requires React 18 or later and `@inchill/react-whiteboard` 1.1 or later (for lines and arrows that turn or curve).
 
 ## Use
 
@@ -252,46 +252,9 @@ pnpm preview:demo   # check the build locally
 - **Claude** allows browser calls (the page sends the required opt-in header).
 - **Other services**: whether they accept calls from web pages is up to each one. If one refuses (a CORS error), the page says so, and visitors can enter a proxy of their own as the endpoint.
 
-To publish from GitHub Actions:
+The repository publishes it with `.github/workflows/deploy.yml`: every push to `main` runs lint, type checks and tests, builds `dist-demo` and deploys it to GitHub Pages; it can also be run by hand from the Actions tab. A demo that fails its checks is not published. `.env.local` is for local development only: the static build never reads `.env` files, the page has no code path to the dev server, and the workflow refuses to publish a page that refers to either.
 
-1. Add `.github/workflows/deploy.yml`:
-
-    ```yaml
-    name: Deploy demo
-    on:
-      push:
-        branches: [main]
-      workflow_dispatch:
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    concurrency:
-      group: pages
-      cancel-in-progress: true
-    jobs:
-      deploy:
-        runs-on: ubuntu-latest
-        environment:
-          name: github-pages
-          url: ${{ steps.deployment.outputs.page_url }}
-        steps:
-          - uses: actions/checkout@v4
-          - uses: pnpm/action-setup@v4
-          - uses: actions/setup-node@v4
-            with:
-              node-version: 24
-              cache: pnpm
-          - run: pnpm install --frozen-lockfile
-          - run: pnpm build:demo
-          - uses: actions/upload-pages-artifact@v3
-            with:
-              path: dist-demo
-          - id: deployment
-            uses: actions/deploy-pages@v4
-    ```
-
-2. In the repository settings, under **Pages → Build and deployment → Source**, choose **GitHub Actions**.
+One-time setup: in the repository settings, under **Pages → Build and deployment → Source**, choose **GitHub Actions**. The page is then at `https://<owner>.github.io/react-whiteboard-ai/`.
 
 ## Development
 
@@ -304,6 +267,10 @@ Requires Node 24 or later and pnpm 10.
 | `pnpm build:demo` / `pnpm preview:demo` | Static demo into `dist-demo` / preview it |
 | `pnpm test` / `pnpm test:watch` | Vitest |
 | `pnpm lint`, `pnpm typecheck` | ESLint, TypeScript |
+| `pnpm eval:layout` | Layout benchmark: lays out fixed diagrams and scores crossings, overlaps and spacing against a baseline (no model needed) |
+| `pnpm eval:model` | Model eval: sends test prompts to the model in `.env.local` and scores content, layout, rounds, time and tokens |
+
+See [eval/README.md](./eval/README.md) for the test set and how scores are computed.
 
 ## License
 
