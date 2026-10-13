@@ -304,6 +304,10 @@ Requires Node 24 or later and pnpm 10.
 | `pnpm build:demo` / `pnpm preview:demo` | Static demo into `dist-demo` / preview it |
 | `pnpm test` / `pnpm test:watch` | Vitest |
 | `pnpm lint`, `pnpm typecheck` | ESLint, TypeScript |
+| `pnpm eval:layout` | Layout benchmark: lays out fixed diagrams and scores crossings, overlaps and spacing against a baseline (no model needed) |
+| `pnpm eval:model` | Model eval: sends test prompts to the model in `.env.local` and scores content, layout, rounds, time and tokens |
+
+See [eval/README.md](./eval/README.md) for the test set and how scores are computed.
 
 ## License
 
