@@ -5,7 +5,8 @@ import { SKETCH_EXAMPLE } from '../src/prompts/sketchExample';
 describe('buildSystemPrompt', () => {
     it('states what can and cannot be drawn, and how to lay out text', () => {
         const prompt = buildSystemPrompt();
-        expect(prompt).toContain('There are no curves, polygons or rotation.');
+        expect(prompt).toContain('There are no polygons or rotation.');
+        expect(prompt).toContain('turning at right angles through `via` points');
         expect(prompt).toContain('use draw_sketch rather than composing ellipses');
         expect(prompt).toContain('1 × fontSize per CJK character');
     });
