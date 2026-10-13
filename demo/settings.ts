@@ -102,3 +102,22 @@ export function saveThinking(on: boolean) {
         /* storage unavailable: the choice lasts for this page only */
     }
 }
+
+const PANEL_KEY = 'react-whiteboard-ai-demo:panel';
+
+/** Whether the assistant panel is open. Open by default. */
+export function loadPanelOpen(): boolean {
+    try {
+        return localStorage.getItem(PANEL_KEY) !== 'closed';
+    } catch {
+        return true;
+    }
+}
+
+export function savePanelOpen(open: boolean) {
+    try {
+        localStorage.setItem(PANEL_KEY, open ? 'open' : 'closed');
+    } catch {
+        /* storage unavailable: the choice lasts for this page only */
+    }
+}
