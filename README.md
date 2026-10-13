@@ -217,7 +217,7 @@ The demo is a whiteboard with a chat panel. It shows:
 Click **连接模型** in the panel header and fill in the endpoint, the API format, an API key and the model. Two formats work:
 
 - **Anthropic Messages** (`…/v1/messages`): Claude and the Anthropic-compatible endpoints of DeepSeek, Qwen, GLM, Doubao and others.
-- **OpenAI-compatible Chat Completions** (`…/chat/completions`): what most company gateways, one-api / new-api and LiteLLM offer. The conversation and tools are sent in that format, and the streamed reply (text, tool calls, and `reasoning_content` as thinking) is translated back, so everything else works the same. There is no common switch for reasoning in this format, so the deep-thinking switch has no effect there.
+- **OpenAI-compatible Chat Completions** (`…/chat/completions`): what most company gateways and self-hosted model gateways offer. The conversation and tools are sent in that format, and the streamed reply (text, tool calls, and `reasoning_content` as thinking) is translated back, so everything else works the same. There is no common switch for reasoning in this format, so the deep-thinking switch has no effect there.
 
 The endpoint field suggests some:
 

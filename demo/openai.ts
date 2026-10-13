@@ -1,6 +1,6 @@
 /**
  * OpenAI-compatible Chat Completions, spoken through the Anthropic shapes the rest of the demo uses.
- * Company gateways (one-api, new-api, LiteLLM, Azure and the like) usually offer only this format.
+ * Company and self-hosted model gateways usually offer only this format.
  *
  * Requests: the conversation (Anthropic messages with tool_use / tool_result blocks) becomes chat
  * messages with tool_calls and tool messages. Replies: the streamed chunks become Anthropic
