@@ -1,9 +1,13 @@
 import { useId, useState, type KeyboardEvent } from 'react';
 import { isListed, normalizeEndpoint, type Endpoint } from './endpoints';
+import type { ApiFormat } from './modelRequest';
 
 type Props = {
     value: string;
-    onChange: (value: string) => void;
+    /** `picked` is the list entry chosen, when the value came from the list. */
+    onChange: (value: string, picked?: Endpoint) => void;
+    /** The format chosen for the address being typed, stored with it when it is added. */
+    format: ApiFormat;
     /** Built-in endpoints and the user's own. */
     endpoints: Endpoint[];
     onAdd: (endpoint: Endpoint) => void;
@@ -24,7 +28,7 @@ const hostOf = (url: string) => {
  * <datalist>, whose arrow and popup cannot be styled. Typing filters the list; anything can still be
  * typed in, and an address that is not in the list can be added to it under a name.
  */
-export function EndpointField({ value, onChange, endpoints, onAdd, onRemove, autoFocus }: Props) {
+export function EndpointField({ value, onChange, format, endpoints, onAdd, onRemove, autoFocus }: Props) {
     const id = useId();
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(-1);
@@ -39,8 +43,8 @@ export function EndpointField({ value, onChange, endpoints, onAdd, onRemove, aut
     const shown = open && items.length > 0;
     const addable = !listed && normalizeEndpoint(typed) !== null;
 
-    const pick = (url: string) => {
-        onChange(url);
+    const pick = (endpoint: Endpoint) => {
+        onChange(endpoint.url, endpoint);
         setOpen(false);
         setActive(-1);
     };
@@ -49,7 +53,7 @@ export function EndpointField({ value, onChange, endpoints, onAdd, onRemove, aut
         const url = normalizeEndpoint(typed);
         const name = naming?.trim() || hostOf(url ?? '');
         if (!url || !name) return;
-        onAdd({ name, url, custom: true });
+        onAdd({ name, url, format, custom: true });
         onChange(url);
         setNaming(null);
     };
@@ -66,7 +70,7 @@ export function EndpointField({ value, onChange, endpoints, onAdd, onRemove, aut
             setActive((i) => (i + step + items.length) % items.length);
         } else if (e.key === 'Enter' && shown && active >= 0) {
             e.preventDefault();
-            pick(items[active].url);
+            pick(items[active]);
         } else if (e.key === 'Escape' && shown) {
             // Close only the list, not the whole settings popover.
             e.stopPropagation();
@@ -104,8 +108,9 @@ export function EndpointField({ value, onChange, endpoints, onAdd, onRemove, aut
                         setNaming(null);
                     }}
                     onKeyDown={onKeyDown}
+                    onClick={() => setOpen(true)}
                     onBlur={() => setOpen(false)}
-                    placeholder="https://api.deepseek.com/anthropic"
+                    placeholder="选一个，或输入任意地址（如公司网关）"
                     spellCheck={false}
                     autoComplete="off"
                     inputMode="url"
@@ -135,9 +140,12 @@ export function EndpointField({ value, onChange, endpoints, onAdd, onRemove, aut
                                 className={i === active ? 'is-active' : undefined}
                                 onMouseDown={(ev) => ev.preventDefault()}
                                 onMouseEnter={() => setActive(i)}
-                                onClick={() => pick(e.url)}
+                                onClick={() => pick(e)}
                             >
-                                <span className="combo-name">{e.name}</span>
+                                <span className="combo-name">
+                                    {e.name}
+                                    {e.format === 'openai' && <span className="combo-format">OpenAI</span>}
+                                </span>
                                 <span className="combo-url">{e.url}</span>
                                 {e.custom && (
                                     <button
@@ -158,6 +166,9 @@ export function EndpointField({ value, onChange, endpoints, onAdd, onRemove, aut
                                 )}
                             </li>
                         ))}
+                        <li className="combo-hint" role="presentation" onMouseDown={(ev) => ev.preventDefault()}>
+                            列表里没有？直接在上面输入地址，比如公司网关，再「添加到常用接口」。
+                        </li>
                     </ul>
                 )}
             </div>

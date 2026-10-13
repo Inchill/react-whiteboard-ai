@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { EndpointField } from './EndpointField';
 import { allEndpoints, loadCustomEndpoints, saveCustomEndpoints, type Endpoint } from './endpoints';
-import { serviceName } from './modelRequest';
+import { formatFromUrl, serviceName, type ApiFormat } from './modelRequest';
 import type { AISettings } from './settings';
 
 type Props = {
@@ -18,6 +18,7 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
     const [baseUrl, setBaseUrl] = useState(settings?.baseUrl ?? '');
     const [key, setKey] = useState('');
     const [model, setModel] = useState(settings?.model ?? '');
+    const [format, setFormat] = useState<ApiFormat>(settings?.format ?? 'anthropic');
     const [remember, setRemember] = useState(settings?.remember ?? false);
     const [custom, setCustom] = useState<Endpoint[]>(loadCustomEndpoints);
     const updateCustom = (list: Endpoint[]) => {
@@ -32,23 +33,51 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
     const submit = (e: FormEvent) => {
         e.preventDefault();
         if (!complete) return;
-        onSave({ baseUrl: baseUrl.trim(), key: nextKey, model: model.trim(), remember });
+        onSave({ baseUrl: baseUrl.trim(), key: nextKey, model: model.trim(), format, remember });
         setKey('');
     };
 
     return (
         <form className="settings" onSubmit={submit} aria-labelledby={`${id}-title`}>
             <h2 id={`${id}-title`}>连接模型</h2>
-            <p className="settings-intro">支持 Anthropic 消息格式的接口都能用，比如 Claude、DeepSeek、千问、智谱、豆包。</p>
+            <p className="settings-intro">
+                Anthropic 消息格式或 OpenAI 兼容格式的接口都能用：Claude、DeepSeek、千问、智谱、豆包，也可以是公司内部网关、one-api、LiteLLM 等。
+            </p>
 
             <EndpointField
                 value={baseUrl}
-                onChange={setBaseUrl}
+                onChange={(url, picked) => {
+                    setBaseUrl(url);
+                    const guessed = picked?.format ?? formatFromUrl(url);
+                    if (guessed) setFormat(guessed);
+                }}
+                format={format}
                 endpoints={allEndpoints(custom)}
                 onAdd={(e) => updateCustom([...custom, e])}
                 onRemove={(url) => updateCustom(custom.filter((e) => e.url !== url))}
                 autoFocus
             />
+
+            <div className="settings-field">
+                <span id={`${id}-format`}>接口格式</span>
+                <div className="segmented" role="radiogroup" aria-labelledby={`${id}-format`}>
+                    {(
+                        [
+                            ['anthropic', 'Anthropic 消息'],
+                            ['openai', 'OpenAI 兼容'],
+                        ] as const
+                    ).map(([value, label]) => (
+                        <button key={value} type="button" role="radio" aria-checked={format === value} onClick={() => setFormat(value)}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
+                <small className="settings-hint">
+                    {format === 'openai'
+                        ? '请求发到 …/chat/completions。这种格式没有统一的推理开关，「深度思考」不起作用，模型自己推理时仍会显示思考过程。'
+                        : '请求发到 …/v1/messages。不确定的话看网关文档：路径里有 chat/completions 的选 OpenAI 兼容。'}
+                </small>
+            </div>
 
             <label className="settings-field">
                 <span>API key</span>
@@ -64,7 +93,7 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
 
             <label className="settings-field">
                 <span>模型</span>
-                <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="如 deepseek-v4-pro、glm-5.2" spellCheck={false} />
+                <input value={model} onChange={(e) => setModel(e.target.value)} placeholder={format === 'openai' ? '以网关里的模型名为准，如 gpt-5、qwen-max' : '如 deepseek-v4-pro、glm-5.2'} spellCheck={false} />
             </label>
 
             <label className="settings-check">

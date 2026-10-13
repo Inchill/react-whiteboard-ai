@@ -425,6 +425,67 @@ button:disabled {
     color: var(--pop-ink);
 }
 
+.combo-format {
+    margin-left: 5px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--pop-accent) 12%, transparent);
+    color: var(--pop-accent);
+    font-size: 10px;
+    font-weight: 600;
+    vertical-align: 1px;
+}
+
+/* The last row of the endpoint list: not an option, a pointer to typing any address. */
+.combo-list li.combo-hint {
+    display: block;
+    margin-top: 4px;
+    padding: 8px 10px 6px;
+    border-top: 1px solid var(--pop-line);
+    border-radius: 0;
+    color: var(--pop-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    cursor: default;
+}
+
+/* Two choices side by side, the chosen one raised. */
+.segmented {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--pop-line);
+    border-radius: 10px;
+    background: var(--pop-field);
+}
+
+.segmented button {
+    flex: 1;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--pop-muted);
+    font-size: 13px;
+}
+
+.segmented button:hover {
+    color: var(--pop-ink);
+}
+
+.segmented button[aria-checked='true'] {
+    background: var(--pop-raised);
+    color: var(--pop-ink);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.settings-hint {
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--pop-muted);
+}
+
 .combo-add {
     align-self: flex-start;
     margin-top: -2px;

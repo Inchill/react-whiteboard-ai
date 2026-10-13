@@ -337,7 +337,7 @@ export function App() {
                             <p className="log-empty-title">告诉我要在白板上画什么</p>
                             <p>
                                 比如“画一个三步的注册流程”“把所有框改成蓝色”。
-                                {canAsk ? '也可以直接点下面的示例。' : '先在右上角连接模型（DeepSeek 或 Claude），再输入指令或点下面的示例。'}
+                                {canAsk ? '也可以直接点下面的示例。' : '先在右上角连接模型（任何 Anthropic 或 OpenAI 兼容的接口，包括公司网关），再输入指令或点下面的示例。'}
                             </p>
                         </div>
                     )}

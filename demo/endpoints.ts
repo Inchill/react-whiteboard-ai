@@ -1,7 +1,7 @@
-import { KNOWN_ENDPOINTS, messagesUrl } from './modelRequest';
+import { KNOWN_ENDPOINTS, messagesUrl, type ApiFormat } from './modelRequest';
 
-/** An endpoint in the picker: a built-in one, or one the user added. */
-export type Endpoint = { name: string; url: string; custom?: boolean };
+/** An endpoint in the picker: a built-in one, or one the user added, with the format it speaks. */
+export type Endpoint = { name: string; url: string; format: ApiFormat; custom?: boolean };
 
 const STORAGE_KEY = 'react-whiteboard-ai-demo:endpoints';
 
@@ -23,7 +23,7 @@ export function loadCustomEndpoints(): Endpoint[] {
         if (!Array.isArray(parsed)) return [];
         return parsed
             .filter((e): e is Endpoint => typeof e?.name === 'string' && typeof e?.url === 'string' && e.name.trim() !== '' && normalizeEndpoint(e.url) !== null)
-            .map((e) => ({ name: e.name.trim(), url: e.url, custom: true }));
+            .map((e) => ({ name: e.name.trim(), url: e.url, format: e.format === 'openai' ? ('openai' as const) : ('anthropic' as const), custom: true }));
     } catch {
         return [];
     }
@@ -31,7 +31,7 @@ export function loadCustomEndpoints(): Endpoint[] {
 
 export function saveCustomEndpoints(list: Endpoint[]) {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(list.map(({ name, url }) => ({ name, url }))));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list.map(({ name, url, format }) => ({ name, url, format }))));
     } catch {
         /* storage unavailable: the list lasts for this page only */
     }
@@ -39,7 +39,7 @@ export function saveCustomEndpoints(list: Endpoint[]) {
 
 /** Built-in endpoints first, then the user's, without duplicates. */
 export function allEndpoints(custom: Endpoint[]): Endpoint[] {
-    const known = KNOWN_ENDPOINTS.map((e) => ({ name: e.name, url: e.url }));
+    const known = KNOWN_ENDPOINTS.map((e): Endpoint => ({ name: e.name, url: e.url, format: 'anthropic' }));
     const seen = new Set(known.map((e) => messagesUrl(e.url)));
     return [...known, ...custom.filter((e) => !seen.has(messagesUrl(e.url)))];
 }
