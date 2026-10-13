@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { describeCall } from './describeCall';
@@ -61,7 +61,9 @@ export function App() {
     const [deepThinking, setDeepThinking] = useState(loadThinking);
     const [exampleGroup, setExampleGroup] = useState(loadExampleGroup);
     const examples = EXAMPLE_GROUPS.find((g) => g.id === exampleGroup) ?? EXAMPLE_GROUPS[0];
-    const logEnd = useRef<HTMLDivElement>(null);
+    const logRef = useRef<HTMLElement>(null);
+    // Follow new entries while the reader is at the bottom of the log; scrolling up to read stops it.
+    const followLog = useRef(true);
     const composer = useRef<HTMLTextAreaElement>(null);
     // Bumped after each AI turn; the effect below fits the view once React has rendered the new shapes.
     const [fitRequest, setFitRequest] = useState(0);
@@ -85,11 +87,21 @@ export function App() {
             .catch(() => setServerModel(null));
     }, []);
 
-    // Braces matter: newer browsers return a Promise from scrollIntoView, and React treats
-    // any non-function return value of an effect as a mistake.
+    // Keep the log pinned to its bottom while following: after every change to its content, and
+    // whenever its box changes size (the examples above the composer come and go with each turn).
+    // Only the log scrolls, never the page around it, and it lands exactly at the end.
+    const stickToBottom = () => {
+        const el = logRef.current;
+        if (el && followLog.current) el.scrollTop = el.scrollHeight;
+    };
+    useLayoutEffect(stickToBottom, [log, busy, live]);
     useEffect(() => {
-        logEnd.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-    }, [log, busy, live]);
+        const el = logRef.current;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        const watch = new ResizeObserver(stickToBottom);
+        watch.observe(el);
+        return () => watch.disconnect();
+    }, []);
 
     useEffect(() => {
         if (fitRequest) board.current?.zoomToFit();
@@ -137,6 +149,7 @@ export function App() {
             return;
         }
         if (!example) setInput('');
+        followLog.current = true;
         setBusy(true);
         push({ kind: 'prompt', text: prompt, example });
         thoughtOpenRef.current = false;
@@ -301,7 +314,16 @@ export function App() {
                     )}
                 </header>
 
-                <section className="log" aria-live="polite" aria-label="操作记录">
+                <section
+                    ref={logRef}
+                    className="log"
+                    aria-live="polite"
+                    aria-label="操作记录"
+                    onScroll={(e) => {
+                        const el = e.currentTarget;
+                        followLog.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+                    }}
+                >
                     {log.length === 0 && (
                         <div className="log-empty">
                             <p className="log-empty-title">告诉我要在白板上画什么</p>
@@ -328,7 +350,6 @@ export function App() {
                             <span className="trim">等待模型回复</span>
                         </p>
                     )}
-                    <div ref={logEnd} />
                 </section>
 
                 <form
