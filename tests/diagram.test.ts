@@ -10,6 +10,18 @@ const ids = () => {
 type Box = { x: number; y: number; w: number; h: number };
 type Linear = Extract<Shape, { type: 'line' | 'arrow' }>;
 
+type Seg = { x1: number; y1: number; x2: number; y2: number; line: Linear; last: boolean };
+
+/** Every straight segment of every line and arrow, through its via points. */
+function segmentsOf(shapes: Shape[]): Seg[] {
+    return shapes
+        .filter((s): s is Linear => s.type === 'line' || s.type === 'arrow')
+        .flatMap((line) => {
+            const pts = [[line.x1, line.y1], ...(line.via ?? []), [line.x2, line.y2]];
+            return pts.slice(1).map(([x2, y2], i) => ({ x1: pts[i][0], y1: pts[i][1], x2, y2, line, last: i === pts.length - 2 }));
+        });
+}
+
 function boxesOf(input: DiagramInput) {
     const { shapes, nodes } = layoutDiagram(input, { createId: ids() });
     const byId = new Map(shapes.map((s) => [s.id, s]));
@@ -106,10 +118,13 @@ describe('layoutDiagram', () => {
         });
         expect(box('in').y).toBeLessThan(box('check').y);
         expect(box('check').y).toBeLessThan(box('retry').y);
+        // One dashed arrow that turns around the side.
         const back = shapes.filter((s): s is Linear => (s.type === 'line' || s.type === 'arrow') && s.strokeStyle === 'dashed');
-        expect(back).toHaveLength(3);
+        expect(back).toHaveLength(1);
+        expect(back[0].type).toBe('arrow');
+        expect(back[0].via).toHaveLength(2);
         // Enters the box it returns to from the right, pointing left.
-        const head = back.find((s) => s.type === 'arrow')!;
+        const head = segmentsOf(back).find((g) => g.last)!;
         expect(head.x2).toBeCloseTo(box('in').x + box('in').w + 4);
         expect(head.x2).toBeLessThan(head.x1);
         expect(shapes.some((s) => s.type === 'text' && s.text === '失败')).toBe(true);
@@ -150,7 +165,7 @@ describe('layoutDiagram', () => {
             ],
         });
         const boxes = Object.keys(nodes).map(box);
-        const legs = shapes.filter((s): s is Linear => s.type === 'line' || s.type === 'arrow');
+        const legs = segmentsOf(shapes);
         for (const leg of legs) {
             for (const b of boxes) {
                 // Sample along each leg; no point may sit strictly inside a box.
@@ -163,7 +178,7 @@ describe('layoutDiagram', () => {
         }
         // It arrives at the database straight from above, inside the box's width.
         const db = box('db');
-        const into = legs.filter((l) => l.type === 'arrow' && Math.abs(l.y2 - (db.y - 4)) < 0.01);
+        const into = legs.filter((l) => l.last && l.line.type === 'arrow' && Math.abs(l.y2 - (db.y - 4)) < 0.01);
         expect(into).toHaveLength(1);
         expect(into[0].x1).toBe(into[0].x2);
         expect(into[0].x2).toBeGreaterThan(db.x);
@@ -179,10 +194,12 @@ describe('layoutDiagram', () => {
                 { from: 'b', to: 'a', label: '回复' },
             ],
         });
-        const ys = shapes.filter((s): s is Linear => s.type === 'line' && s.y1 === s.y2).map((s) => s.y1);
-        // Three detours, each on its own height above the row.
+        // Three detours above the row, each a single arrow with its own height.
+        const ys = segmentsOf(shapes)
+            .filter((g) => g.y1 === g.y2 && g.y1 < box('a').y)
+            .map((g) => g.y1);
         expect(new Set(ys).size).toBe(3);
-        for (const y of ys) expect(y).toBeLessThan(box('a').y);
+        expect(shapes.filter((s) => s.type === 'line')).toHaveLength(0);
     });
 
     it('lays layers out left to right with direction "right"', () => {

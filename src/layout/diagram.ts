@@ -303,10 +303,10 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
     type UV = { u: number; v: number };
     const same = (a: number, b: number) => Math.abs(a - b) < 0.5;
     /**
-     * Draw a path given as (u, v) corners: lines between them and an arrow on the last leg. The ends
-     * are pulled back from the boxes (2 at the start, 4 at the arrowhead). Returns the last leg.
+     * Draw a path given as (u, v) corners as one arrow that turns through them, or curves through
+     * them when `curved`. The ends are pulled back from the boxes (2 at the start, 4 at the arrowhead).
      */
-    const path = (points: UV[], style: StrokeStyle, label?: string) => {
+    const path = (points: UV[], style: StrokeStyle, label?: string, curved = false) => {
         const pts = points.filter((p, i) => i === 0 || !same(p.u, points[i - 1].u) || !same(p.v, points[i - 1].v));
         const corners = pts.filter((p, i) => {
             if (i === 0 || i === pts.length - 1) return true;
@@ -322,11 +322,13 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
         const n = corners.length;
         corners[0] = pull(corners[0], corners[1], 2);
         corners[n - 1] = pull(corners[n - 1], corners[n - 2], 4);
-        for (let i = 1; i < n; i++) {
-            const a = toXY(corners[i - 1].u, corners[i - 1].v);
-            const b = toXY(corners[i].u, corners[i].v);
-            out.edge.push(i === n - 1 ? arrow(a, b, style) : line(a, b, style));
-        }
+        const xy = corners.map((c) => toXY(c.u, c.v));
+        const via = xy.slice(1, -1).map((p): [number, number] => [p.x, p.y]);
+        out.edge.push({
+            ...arrow(xy[0], xy[n - 1], style),
+            ...(via.length ? { via } : {}),
+            ...(curved && via.length ? { curved: true } : {}),
+        });
         const [a, b] = [corners[n - 2], corners[n - 1]];
         if (label) edgeLabel(label, toXY((a.u + b.u) / 2, (a.v + b.v) / 2), same(a.u, b.u) ? 'v' : 'u');
     };
