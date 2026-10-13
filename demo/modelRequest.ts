@@ -1,21 +1,30 @@
 import { buildSystemPrompt } from '../src/prompts/system';
-import { toAnthropicTools } from '../src/tools/schema';
+import { toAnthropicTools, toOpenAITools } from '../src/tools/schema';
+import { chatCompletionsUrl, toAnthropicMessage, toAnthropicStream, toChatMessages } from './openai';
 
 /**
  * Building and sending a streamed Messages API request. Shared by the local dev proxy (Node) and
  * by the deployed page, which calls the model straight from the browser because a static host
  * such as GitHub Pages has no server to proxy through.
  *
- * Any service that speaks the Anthropic Messages format works: Claude itself, and the compatible
- * endpoints of DeepSeek, Qwen, GLM, Doubao and others. The user sets the endpoint, key and model.
+ * Two request formats: the Anthropic Messages format (Claude itself, and the compatible endpoints
+ * of DeepSeek, Qwen, GLM, Doubao and others) and OpenAI-compatible Chat Completions, which most
+ * company gateways offer. Replies in either format come back as Anthropic Messages events.
  */
 
+export type ApiFormat = 'anthropic' | 'openai';
+
 export type Target = {
-    /** A base ("https://host/anthropic"), a base ending in "/v1", or a full ".../v1/messages" URL. */
+    /** A base ("https://host/anthropic"), a base ending in "/v1", or a full ".../v1/messages" or ".../chat/completions" URL. */
     baseUrl: string;
     key: string;
     model: string;
+    /** Defaults to 'anthropic'. */
+    format?: ApiFormat;
 };
+
+/** A guess from the address alone: a Chat Completions URL is OpenAI format. */
+export const formatFromUrl = (url: string): ApiFormat | null => (/\/chat\/completions\/?$/i.test(url.trim()) ? 'openai' : null);
 
 /** Known Anthropic-compatible endpoints, offered as suggestions and used to name the service. */
 export const KNOWN_ENDPOINTS = [
@@ -85,6 +94,7 @@ export type CallOptions = {
 };
 
 export async function callModel(t: Target, o: CallOptions): Promise<Response> {
+    if (t.format === 'openai') return callChatCompletions(t, o);
     const maxTokens = o.maxTokens ?? MAX_TOKENS;
     const headers: Record<string, string> = { 'x-api-key': t.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' };
     if (isAnthropic(t.baseUrl)) {
@@ -115,4 +125,34 @@ export async function callModel(t: Target, o: CallOptions): Promise<Response> {
         return send(false);
     }
     return first;
+}
+
+/**
+ * The same request in OpenAI-compatible Chat Completions format, answered as Anthropic Messages
+ * events (or a Messages body when the service did not stream). Errors pass through unchanged:
+ * OpenAI-style error bodies have the same `error.message` the page reads. There is no common way
+ * to switch reasoning on or off in this format, so the thinking setting is not sent; reasoning a
+ * model does anyway (`reasoning_content`) still shows as thinking.
+ */
+async function callChatCompletions(t: Target, o: CallOptions): Promise<Response> {
+    const res = await fetch(chatCompletionsUrl(t.baseUrl), {
+        method: 'POST',
+        signal: o.signal,
+        headers: { authorization: `Bearer ${t.key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+            model: t.model,
+            max_tokens: o.maxTokens ?? MAX_TOKENS,
+            stream: true,
+            messages: toChatMessages(buildSystemPrompt(), o.messages),
+            tools: toOpenAITools(),
+        }),
+    });
+    if (!res.ok || !res.body) return res;
+    const type = res.headers.get('content-type') ?? '';
+    if (type.includes('text/event-stream')) {
+        return new Response(toAnthropicStream(res.body), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    }
+    const data = await res.json().catch(() => null);
+    if (!data) return new Response(JSON.stringify({ error: { message: 'The service answered with something that is not JSON.' } }), { status: 502 });
+    return new Response(JSON.stringify(toAnthropicMessage(data)), { status: 200, headers: { 'content-type': 'application/json' } });
 }

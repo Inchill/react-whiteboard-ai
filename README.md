@@ -214,7 +214,12 @@ The demo is a whiteboard with a chat panel. It shows:
 
 ### Connect a model
 
-Click **连接模型** in the panel header and fill in three fields: the endpoint, an API key and the model. Any service that speaks the Anthropic Messages format works, and the endpoint field suggests some:
+Click **连接模型** in the panel header and fill in the endpoint, the API format, an API key and the model. Two formats work:
+
+- **Anthropic Messages** (`…/v1/messages`): Claude and the Anthropic-compatible endpoints of DeepSeek, Qwen, GLM, Doubao and others.
+- **OpenAI-compatible Chat Completions** (`…/chat/completions`): what most company gateways, one-api / new-api and LiteLLM offer. The conversation and tools are sent in that format, and the streamed reply (text, tool calls, and `reasoning_content` as thinking) is translated back, so everything else works the same. There is no common switch for reasoning in this format, so the deep-thinking switch has no effect there.
+
+The endpoint field suggests some:
 
 | Service | Endpoint |
 | --- | --- |
@@ -224,7 +229,7 @@ Click **连接模型** in the panel header and fill in three fields: the endpoin
 | Doubao (Volcengine Ark) | `https://ark.cn-beijing.volces.com/api/compatible` |
 | Claude | `https://api.anthropic.com` |
 
-The endpoint can also be any other compatible service, gateway or your own proxy. Type its address and choose *添加到常用接口* to keep it in the list under a name of your own; it is stored in this browser (the address and name only, never the key) and can be removed from the list again. Model names change often, so check each service's documentation for current ones. The key is sent with both `x-api-key` and, except to Anthropic, `Authorization: Bearer`, since compatible services differ in which they read. The deep-thinking switch sends `thinking` enabled or disabled explicitly, because services differ in whether a model thinks by default; if a service rejects the request, it is retried once without it. Settings are kept in this tab only, or in the browser if you tick *在这个浏览器里记住*.
+The endpoint can also be any other compatible service, a company gateway or your own proxy: type its address, pick its format, and choose *添加到常用接口* to keep it in the list under a name of your own. It is stored in this browser (the address, name and format, never the key) and can be removed from the list again. An address ending in `/chat/completions` selects the OpenAI format by itself. Model names change often, so check each service's documentation for current ones. In the Anthropic format the key is sent with both `x-api-key` and, except to Anthropic, `Authorization: Bearer`, since compatible services differ in which they read; in the OpenAI format it is sent as `Authorization: Bearer`. The deep-thinking switch sends `thinking` enabled or disabled explicitly, because services differ in whether a model thinks by default; if a service rejects the request, it is retried once without it. Settings are kept in this tab only, or in the browser if you tick *在这个浏览器里记住*.
 
 In `pnpm dev`, requests go through a small proxy in the Vite dev server, which forwards them and streams the reply back. The proxy never logs or stores keys. It prints one line per request with timing and event counts, never content.
 
@@ -233,6 +238,7 @@ You can also configure the model in `.env.local` (copy `.env.example`), so you d
 | Variable | |
 | --- | --- |
 | `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` | Endpoint, key and model |
+| `AI_FORMAT` | `openai` for an OpenAI-compatible endpoint. Default: Anthropic Messages |
 | `AI_THINKING` | `on` to think by default. The page switch overrides it |
 | `AI_MAX_TOKENS` | Default 16000. Thinking counts toward it |
 
@@ -251,6 +257,7 @@ pnpm preview:demo   # check the build locally
 
 - **Claude** allows browser calls (the page sends the required opt-in header).
 - **Other services**: whether they accept calls from web pages is up to each one. If one refuses (a CORS error), the page says so, and visitors can enter a proxy of their own as the endpoint.
+- **Company gateways**: the visitor's browser has to reach the gateway (an internal one only from the company network) and the gateway has to allow calls from the page's origin. Otherwise run `pnpm dev` locally, where the dev server makes the call.
 
 The repository publishes it with `.github/workflows/deploy.yml`: every push to `main` runs lint, type checks and tests, builds `dist-demo` and deploys it to GitHub Pages; it can also be run by hand from the Actions tab. A demo that fails its checks is not published. `.env.local` is for local development only: the static build never reads `.env` files, the page has no code path to the dev server, and the workflow refuses to publish a page that refers to either.
 

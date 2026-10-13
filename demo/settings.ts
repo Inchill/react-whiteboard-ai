@@ -1,11 +1,13 @@
 import { loadCustomEndpoints } from './endpoints';
-import { serviceName } from './modelRequest';
+import { serviceName, type ApiFormat } from './modelRequest';
 
 /** Any Anthropic-compatible endpoint: the user fills in all three. */
 export type AISettings = {
     baseUrl: string;
     key: string;
     model: string;
+    /** The request format the endpoint speaks. */
+    format: ApiFormat;
     /** Keep in localStorage across sessions instead of sessionStorage (this tab only). */
     remember: boolean;
 };
@@ -28,6 +30,7 @@ function upgrade(v: unknown): AISettings | null {
         baseUrl: text(o.baseUrl) || legacy?.baseUrl || '',
         key: text(o.key),
         model: text(o.model) || legacy?.model || '',
+        format: o.format === 'openai' ? ('openai' as const) : ('anthropic' as const),
         remember: o.remember === true,
     };
     return settings.baseUrl && settings.key && settings.model ? settings : null;
@@ -78,6 +81,7 @@ export const settingsHeaders = (s: AISettings): Record<string, string> => ({
     'x-ai-base-url': s.baseUrl,
     'x-ai-key': s.key,
     'x-ai-model': s.model,
+    'x-ai-format': s.format,
 });
 
 const THINKING_KEY = 'react-whiteboard-ai-demo:thinking';

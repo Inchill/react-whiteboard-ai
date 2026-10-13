@@ -47,11 +47,13 @@ class EventTally {
 
 /**
  * The endpoint configured in .env.local, used when the page sends none of its own:
- * AI_BASE_URL, AI_API_KEY and AI_MODEL. Older files with DEEPSEEK_API_KEY or ANTHROPIC_API_KEY
+ * AI_BASE_URL, AI_API_KEY and AI_MODEL, and AI_FORMAT=openai for an OpenAI-compatible endpoint. Older files with DEEPSEEK_API_KEY or ANTHROPIC_API_KEY
  * (and AI_PROVIDER to choose between them) still work.
  */
 export function targetFromEnv(env: Record<string, string>): Target | null {
-    if (env.AI_BASE_URL && env.AI_API_KEY && env.AI_MODEL) return { baseUrl: env.AI_BASE_URL, key: env.AI_API_KEY, model: env.AI_MODEL };
+    if (env.AI_BASE_URL && env.AI_API_KEY && env.AI_MODEL) {
+        return { baseUrl: env.AI_BASE_URL, key: env.AI_API_KEY, model: env.AI_MODEL, format: env.AI_FORMAT === 'openai' ? 'openai' : 'anthropic' };
+    }
     const legacy = env.AI_PROVIDER || (env.ANTHROPIC_API_KEY ? 'anthropic' : env.DEEPSEEK_API_KEY ? 'deepseek' : '');
     if (legacy === 'deepseek' && env.DEEPSEEK_API_KEY) {
         return { baseUrl: 'https://api.deepseek.com/anthropic', key: env.DEEPSEEK_API_KEY, model: env.DEEPSEEK_MODEL || 'deepseek-flash' };
@@ -73,7 +75,8 @@ function targetFromRequest(req: IncomingMessage): Target | null | 'incomplete' {
     if (!key) return null;
     const baseUrl = header(req, 'x-ai-base-url');
     const model = header(req, 'x-ai-model');
-    return baseUrl && model ? { baseUrl, key, model } : 'incomplete';
+    const format = header(req, 'x-ai-format') === 'openai' ? 'openai' : 'anthropic';
+    return baseUrl && model ? { baseUrl, key, model, format } : 'incomplete';
 }
 
 /**
