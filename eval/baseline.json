@@ -106,5 +106,65 @@
     "edgeLength": 215,
     "width": 544,
     "height": 556
+  },
+  "state-machine": {
+    "nodes": 7,
+    "edges": 10,
+    "crossings": 0,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 1,
+    "closeParallels": 0,
+    "bendsPerEdge": 0.9,
+    "edgeLength": 181,
+    "width": 493,
+    "height": 721
+  },
+  "monitoring": {
+    "nodes": 14,
+    "edges": 18,
+    "crossings": 9,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 8,
+    "bendsPerEdge": 1.22,
+    "edgeLength": 306,
+    "width": 1806,
+    "height": 508
+  },
+  "service-calls": {
+    "nodes": 8,
+    "edges": 18,
+    "crossings": 12,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 6,
+    "bendsPerEdge": 0.67,
+    "edgeLength": 296,
+    "width": 1144,
+    "height": 501
+  },
+  "data-pipeline": {
+    "nodes": 12,
+    "edges": 16,
+    "crossings": 3,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 0,
+    "bendsPerEdge": 1.5,
+    "edgeLength": 157,
+    "width": 1520,
+    "height": 371
+  },
+  "dev-loops": {
+    "nodes": 8,
+    "edges": 11,
+    "crossings": 1,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 2,
+    "bendsPerEdge": 0.55,
+    "edgeLength": 233,
+    "width": 272,
+    "height": 1216
   }
 }
