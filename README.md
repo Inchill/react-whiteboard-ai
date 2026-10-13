@@ -252,46 +252,9 @@ pnpm preview:demo   # check the build locally
 - **Claude** allows browser calls (the page sends the required opt-in header).
 - **Other services**: whether they accept calls from web pages is up to each one. If one refuses (a CORS error), the page says so, and visitors can enter a proxy of their own as the endpoint.
 
-To publish from GitHub Actions:
+The repository publishes it with `.github/workflows/deploy.yml`: every push to `main` runs lint, type checks and tests, builds `dist-demo` and deploys it to GitHub Pages; it can also be run by hand from the Actions tab. A demo that fails its checks is not published.
 
-1. Add `.github/workflows/deploy.yml`:
-
-    ```yaml
-    name: Deploy demo
-    on:
-      push:
-        branches: [main]
-      workflow_dispatch:
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    concurrency:
-      group: pages
-      cancel-in-progress: true
-    jobs:
-      deploy:
-        runs-on: ubuntu-latest
-        environment:
-          name: github-pages
-          url: ${{ steps.deployment.outputs.page_url }}
-        steps:
-          - uses: actions/checkout@v4
-          - uses: pnpm/action-setup@v4
-          - uses: actions/setup-node@v4
-            with:
-              node-version: 24
-              cache: pnpm
-          - run: pnpm install --frozen-lockfile
-          - run: pnpm build:demo
-          - uses: actions/upload-pages-artifact@v3
-            with:
-              path: dist-demo
-          - id: deployment
-            uses: actions/deploy-pages@v4
-    ```
-
-2. In the repository settings, under **Pages → Build and deployment → Source**, choose **GitHub Actions**.
+One-time setup: in the repository settings, under **Pages → Build and deployment → Source**, choose **GitHub Actions**. The page is then at `https://<owner>.github.io/react-whiteboard-ai/`.
 
 ## Development
 
