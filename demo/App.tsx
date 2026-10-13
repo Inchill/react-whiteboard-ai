@@ -35,6 +35,15 @@ const MAX_ROUNDS = 5;
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
 
+const REPO_URL = 'https://github.com/Inchill/react-whiteboard-ai';
+
+/** The GitHub mark, drawn as an outline like react-whiteboard's own icon for it. */
+const GitHubIcon = () => (
+    <svg viewBox="0 0 24 24" className="github-mark" aria-hidden>
+        <path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 00-1.3-3.2 4.2 4.2 0 00-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 00-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 00-.1 3.2A4.6 4.6 0 004 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" />
+    </svg>
+);
+
 /*
  * A built page (for GitHub Pages or any static host) has no dev server to proxy through, so it
  * calls the provider straight from the browser with the key the visitor entered. Everything that
@@ -307,29 +316,39 @@ export function App() {
             <main className="demo-board" aria-label="白板">
                 <Whiteboard ref={board} storageKey="react-whiteboard-ai-demo" locale="zh" />
                 {!panelOpen && (
-                    <button ref={reopenButton} type="button" className="panel-reopen" onClick={() => togglePanel(true)} aria-label={`展开 AI 助手${busy ? '（正在回复）' : unseen ? '（有新消息）' : ''}`}>
-                        {busy ? (
-                            <span className="spinner" aria-hidden />
-                        ) : (
-                            <svg viewBox="0 0 16 16" aria-hidden>
-                                <path d="M8 1.5c.5 2.9 1.6 4 4.5 4.5-2.9.5-4 1.6-4.5 4.5-.5-2.9-1.6-4-4.5-4.5 2.9-.5 4-1.6 4.5-4.5ZM12.5 10.5c.2 1.2.7 1.7 2 2-1.3.3-1.8.8-2 2-.2-1.2-.7-1.7-2-2 1.3-.3 1.8-.8 2-2Z" />
-                            </svg>
-                        )}
-                        AI 助手
-                        {unseen && !busy && <span className="panel-reopen-dot" aria-hidden />}
-                    </button>
+                    <div className="board-corner">
+                        <a className="board-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label="在 GitHub 查看源码" title="GitHub">
+                            <GitHubIcon />
+                        </a>
+                        <button ref={reopenButton} type="button" className="panel-reopen" onClick={() => togglePanel(true)} aria-label={`展开 AI 助手${busy ? '（正在回复）' : unseen ? '（有新消息）' : ''}`}>
+                            {busy ? (
+                                <span className="spinner" aria-hidden />
+                            ) : (
+                                <svg viewBox="0 0 16 16" aria-hidden>
+                                    <path d="M8 1.5c.5 2.9 1.6 4 4.5 4.5-2.9.5-4 1.6-4.5 4.5-.5-2.9-1.6-4-4.5-4.5 2.9-.5 4-1.6 4.5-4.5ZM12.5 10.5c.2 1.2.7 1.7 2 2-1.3.3-1.8.8-2 2-.2-1.2-.7-1.7-2-2 1.3-.3 1.8-.8 2-2Z" />
+                                </svg>
+                            )}
+                            AI 助手
+                            {unseen && !busy && <span className="panel-reopen-dot" aria-hidden />}
+                        </button>
+                    </div>
                 )}
             </main>
 
             <aside className="panel" aria-label="AI 助手" inert={!panelOpen}>
                 <header className="panel-head">
                     <h1>react-whiteboard-ai</h1>
+                    <a className="panel-icon panel-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label="在 GitHub 查看源码" title="GitHub">
+                        <GitHubIcon />
+                    </a>
                     <button
                         ref={connectionButton}
                         type="button"
                         className={`connection${connection ? ' is-on' : ''}`}
                         aria-expanded={settingsOpen}
                         aria-haspopup="dialog"
+                        // The model name is cut short when the header is tight; the tooltip has it whole.
+                        title={connection ? `${connection.service} · ${connection.model}` : undefined}
                         onClick={() => (settingsOpen ? closeSettings() : setSettingsOpen(true))}
                     >
                         <span className="connection-dot" aria-hidden />
@@ -363,7 +382,7 @@ export function App() {
                             />
                         </div>
                     )}
-                    <button ref={collapseButton} type="button" className="panel-collapse" onClick={() => togglePanel(false)} aria-label="收起 AI 助手" title="收起">
+                    <button ref={collapseButton} type="button" className="panel-icon panel-collapse" onClick={() => togglePanel(false)} aria-label="收起 AI 助手" title="收起">
                         <svg viewBox="0 0 16 16" aria-hidden>
                             <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
                             <path d="M10.25 2.75v10.5M4.75 6.25 6.5 8l-1.75 1.75" />
