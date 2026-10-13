@@ -1,0 +1,110 @@
+{
+  "arch-right": {
+    "nodes": 16,
+    "edges": 21,
+    "crossings": 7,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 1,
+    "closeParallels": 1,
+    "bendsPerEdge": 0.86,
+    "edgeLength": 244,
+    "width": 1464,
+    "height": 605
+  },
+  "arch-down": {
+    "nodes": 13,
+    "edges": 18,
+    "crossings": 5,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 2,
+    "closeParallels": 0,
+    "bendsPerEdge": 1.33,
+    "edgeLength": 233,
+    "width": 1115,
+    "height": 721
+  },
+  "leave-flow": {
+    "nodes": 6,
+    "edges": 7,
+    "crossings": 0,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 3,
+    "closeParallels": 0,
+    "bendsPerEdge": 1.71,
+    "edgeLength": 195,
+    "width": 480,
+    "height": 721
+  },
+  "order-flow": {
+    "nodes": 11,
+    "edges": 17,
+    "crossings": 2,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 0,
+    "bendsPerEdge": 0.35,
+    "edgeLength": 211,
+    "width": 767,
+    "height": 1381
+  },
+  "er": {
+    "nodes": 6,
+    "edges": 6,
+    "crossings": 1,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 0,
+    "bendsPerEdge": 2,
+    "edgeLength": 219,
+    "width": 512,
+    "height": 691
+  },
+  "login": {
+    "nodes": 5,
+    "edges": 7,
+    "crossings": 0,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 0,
+    "bendsPerEdge": 0.29,
+    "edgeLength": 152,
+    "width": 432,
+    "height": 556
+  },
+  "org": {
+    "nodes": 9,
+    "edges": 14,
+    "crossings": 0,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 0,
+    "bendsPerEdge": 0,
+    "edgeLength": 101,
+    "width": 872,
+    "height": 359
+  },
+  "ci": {
+    "nodes": 8,
+    "edges": 13,
+    "crossings": 0,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 0,
+    "closeParallels": 0,
+    "bendsPerEdge": 0.15,
+    "edgeLength": 128,
+    "width": 1728,
+    "height": 186
+  },
+  "skip-layers": {
+    "nodes": 7,
+    "edges": 8,
+    "crossings": 0,
+    "edgeThroughBox": 0,
+    "labelOverlaps": 1,
+    "closeParallels": 0,
+    "bendsPerEdge": 2.5,
+    "edgeLength": 227,
+    "width": 544,
+    "height": 556
+  }
+}

@@ -47,6 +47,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval:layout": "tsx eval/layout.ts",
+    "eval:model": "tsx eval/model.ts",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
@@ -69,6 +71,7 @@
     "jsdom": "^26.1.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "tsx": "^4.23.15",
     "typescript": "~5.9",
     "typescript-eslint": "^8.71.1",
     "vite": "^7.3.7",

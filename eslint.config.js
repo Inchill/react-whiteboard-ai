@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-    { ignores: ['dist', 'coverage'] },
+    { ignores: ['dist', 'dist-demo', 'coverage', 'eval/out'] },
     {
         extends: [js.configs.recommended, ...tseslint.configs.recommended],
         files: ['**/*.{ts,tsx}'],
@@ -23,5 +23,11 @@ export default tseslint.config(
             indent: ['error', 4, { SwitchCase: 1 }],
             'no-console': 'warn',
         },
+    },
+    {
+        // Command-line scripts: they report to the terminal.
+        files: ['eval/**/*.ts'],
+        languageOptions: { globals: globals.node },
+        rules: { 'no-console': 'off' },
     },
 );
