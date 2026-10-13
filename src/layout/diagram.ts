@@ -291,20 +291,20 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
     });
     const line = (a: Pt, b: Pt, style: StrokeStyle): Shape => ({ id: createId(), type: 'line', x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: INK, ...base, strokeStyle: style });
     const arrow = (a: Pt, b: Pt, style: StrokeStyle): Shape => ({ id: createId(), type: 'arrow', x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: INK, ...base, strokeStyle: style });
-    const edgeLabel = (label: string | undefined, at: Pt, along: 'u' | 'v') => {
-        if (!label) return;
-        const size = measureText(label, S.edgeLabelSize);
-        // Beside a segment that runs along the flow, above one that runs across it.
-        const runsVertically = down ? along === 'v' : along === 'u';
-        const x = runsVertically ? at.x + 8 : at.x - size.w / 2;
-        const y = runsVertically ? at.y - size.h / 2 : at.y - size.h - 6;
-        out.edge.push(text(x, y, label, S.edgeLabelSize, '#495057'));
+    // Edge labels are placed last, once every box and line is known, where they collide with nothing.
+    type LabelRequest = { text: string; segs: [Pt, Pt][]; prefer: number };
+    const labelRequests: LabelRequest[] = [];
+    const pairs = (pts: Pt[]): [Pt, Pt][] => pts.slice(1).map((b, i) => [pts[i], b]);
+    /** Label an edge; `prefer` is the segment it should sit beside if there is room there. */
+    const edgeLabel = (label: string | undefined, segs: [Pt, Pt][], prefer = segs.length - 1) => {
+        if (label && segs.length) labelRequests.push({ text: label, segs, prefer });
     };
     type UV = { u: number; v: number };
     const same = (a: number, b: number) => Math.abs(a - b) < 0.5;
     /**
      * Draw a path given as (u, v) corners as one arrow that turns through them, or curves through
      * them when `curved`. The ends are pulled back from the boxes (2 at the start, 4 at the arrowhead).
+     * Returns the corners in board coordinates.
      */
     const path = (points: UV[], style: StrokeStyle, label?: string, curved = false) => {
         const pts = points.filter((p, i) => i === 0 || !same(p.u, points[i - 1].u) || !same(p.v, points[i - 1].v));
@@ -314,11 +314,17 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
             const b = pts[i + 1];
             return !((same(a.u, p.u) && same(p.u, b.u)) || (same(a.v, p.v) && same(p.v, b.v)));
         });
+        // Along the segment only: a rounding difference across it must not tilt the line.
         const pull = (p: UV, toward: UV, by: number): UV => {
-            const du = Math.sign(toward.u - p.u);
-            const dv = Math.sign(toward.v - p.v);
-            return { u: p.u + du * by, v: p.v + dv * by };
+            const du = toward.u - p.u;
+            const dv = toward.v - p.v;
+            return Math.abs(du) > Math.abs(dv) ? { u: p.u + Math.sign(du) * by, v: p.v } : { u: p.u, v: p.v + Math.sign(dv) * by };
         };
+        // Line up corners that differ only by rounding, so every segment is exactly straight.
+        for (let i = 1; i < corners.length; i++) {
+            if (same(corners[i].u, corners[i - 1].u)) corners[i] = { ...corners[i], u: corners[i - 1].u };
+            if (same(corners[i].v, corners[i - 1].v)) corners[i] = { ...corners[i], v: corners[i - 1].v };
+        }
         const n = corners.length;
         corners[0] = pull(corners[0], corners[1], 2);
         corners[n - 1] = pull(corners[n - 1], corners[n - 2], 4);
@@ -329,8 +335,8 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
             ...(via.length ? { via } : {}),
             ...(curved && via.length ? { curved: true } : {}),
         });
-        const [a, b] = [corners[n - 2], corners[n - 1]];
-        if (label) edgeLabel(label, toXY((a.u + b.u) / 2, (a.v + b.v) / 2), same(a.u, b.u) ? 'v' : 'u');
+        edgeLabel(label, pairs(xy));
+        return xy;
     };
 
     // ---- layer bands ----
@@ -391,8 +397,8 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
             for (const id of to) out.edge.push(arrow(toXY(mid.get(id)!, bus), toXY(mid.get(id)!, top(id) - 4), style));
             // Labels go on the branch that belongs to exactly one edge.
             for (const l of items) {
-                if (from.length === 1) edgeLabel(l.edge.label, toXY(mid.get(l.to)!, (bus + top(l.to)) / 2), 'v');
-                else if (to.length === 1) edgeLabel(l.edge.label, toXY(mid.get(l.from)!, (bottom(l.from) + bus) / 2), 'v');
+                if (from.length === 1) edgeLabel(l.edge.label, [[toXY(mid.get(l.to)!, bus), toXY(mid.get(l.to)!, top(l.to) - 4)]]);
+                else if (to.length === 1) edgeLabel(l.edge.label, [[toXY(mid.get(l.from)!, bottom(l.from) + 2), toXY(mid.get(l.from)!, bus)]]);
                 bused.add(l);
             }
         }
@@ -438,8 +444,70 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
         if (straight && alone && p.out > lo(l.to) + 12 && p.out < lo(l.to) + C - 12) p.in = p.out;
     }
 
+    // Remove small jogs: when a link would step sideways by only a little just before a box (or just
+    // after it), slide one of its ports to line up, if that port stays on the box and clear of the
+    // box's other ports. A short sideways step reads as a glitch and crowds the lines next to it.
+    const JOG = 32;
+    const portClear = (id: string, side: 'out' | 'in', u: number, except: Link) =>
+        u >= lo(id) + 6 &&
+        u <= lo(id) + C - 6 &&
+        rest.every((f) => f === except || (side === 'out' ? f.from !== id : f.to !== id) || Math.abs(ports.get(f)![side] - u) >= 12);
+    for (const l of rest) {
+        const p = ports.get(l)!;
+        const chain = channels.get(l)!;
+        const before = chain.length ? mid.get(chain[chain.length - 1])! : p.out;
+        const step = Math.abs(p.in - before);
+        if (step < 0.5 || step > JOG) continue;
+        if (portClear(l.to, 'in', before, l)) p.in = before;
+        else if (!chain.length && portClear(l.from, 'out', p.in, l)) p.out = p.in;
+    }
+
     // Where a link turns in a gap it gets its own lane there, so parallel turns never share a line.
     const hopsOf = (l: Link) => [ports.get(l)!.out, ...channels.get(l)!.map((ch) => mid.get(ch)!), ports.get(l)!.in];
+
+    // Two links that turn in the same gap, one entering it at nearly the height (or column) where
+    // the other leaves, would run side by side a few units apart whichever turns first. Slide one of
+    // those ends along its box to open a clear gap.
+    const SEPARATE = 12;
+    const turnsIn = (l: Link) => {
+        const hops = hopsOf(l);
+        return hops.slice(1).flatMap((u, k) => (same(u, hops[k]) ? [] : [{ t: r(l.from) + 1 + k, enter: hops[k], leave: u, k }]));
+    };
+    for (let pass = 0; pass < 3; pass++) {
+        let moved = false;
+        for (const a of rest) {
+            for (const b of rest) {
+                if (a === b) continue;
+                for (const ta of turnsIn(a)) {
+                    const tb = turnsIn(b).find((x) => x.t === ta.t);
+                    if (!tb || Math.abs(ta.enter - tb.leave) >= SEPARATE - 2) continue;
+                    const away = (u: number) => u + Math.sign(u - ta.enter || 1) * SEPARATE;
+                    // b runs straight on from here (through channels) to its box: move that whole run.
+                    const hopsB = hopsOf(b);
+                    const chainB = channels.get(b)!;
+                    const run = hopsB.slice(tb.k + 1);
+                    const target = away(tb.leave);
+                    const straightOn = run.every((u) => same(u, tb.leave));
+                    const fitsRun =
+                        straightOn &&
+                        chainB.slice(tb.k).every((ch) => fits(r(ch), ch, target)) &&
+                        portClear(b.to, 'in', target, b);
+                    if (fitsRun) {
+                        chainB.slice(tb.k).forEach((ch) => mid.set(ch, target));
+                        ports.get(b)!.in = target;
+                        moved = true;
+                    } else if (ta.k === 0) {
+                        const u = ta.enter + Math.sign(ta.enter - tb.leave || 1) * SEPARATE;
+                        if (portClear(a.from, 'out', u, a)) {
+                            ports.get(a)!.out = u;
+                            moved = true;
+                        }
+                    }
+                }
+            }
+        }
+        if (!moved) break;
+    }
     const turning = new Map<number, Link[]>();
     for (const l of rest) {
         const hops = hopsOf(l);
@@ -449,8 +517,34 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
             (turning.get(t) ?? turning.set(t, []).get(t)!).push(l);
         });
     }
+    // Lane order within a gap: by where the links come from, then fixed up so that no link's stub
+    // into the gap runs alongside another link's stub out of it. A link that enters at u and one that
+    // leaves at nearly the same u must turn in that order, or their stubs overlap a few units apart.
+    const lanes = new Map<number, Link[]>();
+    const across = (l: Link, t: number) => {
+        const hops = hopsOf(l);
+        const k = t - r(l.from) - 1;
+        return { enter: hops[k], leave: hops[k + 1] };
+    };
+    for (const [t, list] of turning) {
+        const order = [...list].sort((a, b) => ports.get(a)!.out - ports.get(b)!.out);
+        for (let pass = 0; pass < order.length; pass++) {
+            let swapped = false;
+            for (let i = 0; i < order.length; i++) {
+                for (let j = i + 1; j < order.length; j++) {
+                    // order[i] turns first; it must not leave where order[j] still enters.
+                    if (Math.abs(across(order[i], t).leave - across(order[j], t).enter) < 10) {
+                        [order[i], order[j]] = [order[j], order[i]];
+                        swapped = true;
+                    }
+                }
+            }
+            if (!swapped) break;
+        }
+        lanes.set(t, order);
+    }
     const lane = (l: Link, t: number) => {
-        const list = (turning.get(t) ?? []).sort((a, b) => ports.get(a)!.out - ports.get(b)!.out);
+        const list = lanes.get(t) ?? [];
         const first = gapTop(t) + 14;
         const last = gapEnd(t) - 26;
         const k = list.indexOf(l);
@@ -486,8 +580,9 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
         const inset = C / 4 + (k % 2) * 14;
         const from = a + (rightward ? inset : -inset);
         const to = b + (rightward ? -inset : inset);
-        path([{ u: from, v: layerV(rk) }, { u: from, v: over }, { u: to, v: over }, { u: to, v: layerV(rk) }], style);
-        edgeLabel(e.label, toXY((from + to) / 2, over), 'u');
+        const xy = path([{ u: from, v: layerV(rk) }, { u: from, v: over }, { u: to, v: over }, { u: to, v: layerV(rk) }], style);
+        // Beside the stretch above the row.
+        edgeLabel(e.label, pairs(xy), 1);
     }
 
     // Long cycles loop around the far side, each in its own lane. A box at the end of its row is
@@ -513,8 +608,10 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
             const v = layerV(r(e.to)) + M + 12 + k * 8;
             points.push({ u: outer, v }, { u, v }, { u, v: layerV(r(e.to)) + M });
         }
-        path(points, style);
-        edgeLabel(e.label, toXY(outer, (layerV(r(e.from)) + layerV(r(e.to)) + M) / 2), 'v');
+        const segs = pairs(path(points, style));
+        // Beside the long run around the side.
+        const lengths = segs.map(([a, b]) => Math.hypot(b.x - a.x, b.y - a.y));
+        edgeLabel(e.label, segs, lengths.indexOf(Math.max(...lengths)));
     });
 
     // ---- nodes ----
@@ -528,9 +625,100 @@ export function layoutDiagram(input: DiagramInput, options: DiagramOptions = {})
         out.node.push(text(p.x + (W - size.w) / 2, p.y + (H - size.h) / 2, n.label, S.fontSize));
     }
 
+    placeLabels(labelRequests, out, (x, y, value) => text(x, y, value, S.edgeLabelSize, '#495057'));
+
     // Move everything so the diagram's top-left corner lands at the requested point.
     const all = [...out.band, ...out.edge, ...out.node];
     const bounds = unionBox(all.map(shapeBox))!;
     const target = { x: input.x ?? options.origin?.x ?? 0, y: input.y ?? options.origin?.y ?? 0 };
     return { shapes: all.map((s) => translateShape(s, target.x - bounds.x, target.y - bounds.y)), nodes: nodeIds };
 }
+
+type Rect = { x: number; y: number; w: number; h: number };
+
+const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+/** Whether segment ab passes through rectangle r (Liang–Barsky clipping). */
+function crossesRect(a: Pt, b: Pt, r: Rect): boolean {
+    let t0 = 0;
+    let t1 = 1;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const edges: [number, number][] = [
+        [-dx, a.x - r.x],
+        [dx, r.x + r.w - a.x],
+        [-dy, a.y - r.y],
+        [dy, r.y + r.h - a.y],
+    ];
+    for (const [p, q] of edges) {
+        if (p === 0) {
+            if (q < 0) return false;
+        } else if (p < 0) t0 = Math.max(t0, q / p);
+        else t1 = Math.min(t1, q / p);
+    }
+    return t1 > t0;
+}
+
+/**
+ * Put each edge label beside its edge where it overlaps no box, no other label and no other line.
+ * Candidates run along the preferred segment first (its middle, then either side of it), then the
+ * edge's other segments, each on both sides; the first clean one wins, else the least crowded.
+ */
+function placeLabels(
+    requests: { text: string; segs: [Pt, Pt][]; prefer: number }[],
+    out: { band: Shape[]; edge: Shape[]; node: Shape[] },
+    make: (x: number, y: number, value: string) => Shape,
+) {
+    const boxes: Rect[] = out.node.filter((s) => s.type === 'rect' || s.type === 'ellipse').map(shapeBox);
+    const bandLabels: Rect[] = out.band.filter((s) => s.type === 'text').map(shapeBox);
+    const lines = out.edge.flatMap((s) => {
+        if (s.type !== 'line' && s.type !== 'arrow') return [];
+        const pts: Pt[] = [{ x: s.x1, y: s.y1 }, ...(s.via ?? []).map(([x, y]) => ({ x, y })), { x: s.x2, y: s.y2 }];
+        return pts.slice(1).map((b, i): [Pt, Pt] => [pts[i], b]);
+    });
+    const placed: Rect[] = [];
+    const sameSeg = (p: [Pt, Pt], q: [Pt, Pt]) => same2(p[0], q[0]) && same2(p[1], q[1]);
+    for (const req of requests) {
+        const size = measureText(req.text, DIAGRAM_STYLE.edgeLabelSize);
+        const order = [req.prefer, ...req.segs.map((_, i) => i).filter((i) => i !== req.prefer).reverse()];
+        const best: { rect: Rect | null; cost: number } = { rect: null, cost: Infinity };
+        let rank = 0;
+        for (const k of order) {
+            const [a, b] = req.segs[k];
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            const vertical = Math.abs(b.x - a.x) < Math.abs(b.y - a.y);
+            const along = vertical ? size.h : size.w;
+            for (const t of [0.5, 0.3, 0.7, 0.15, 0.85]) {
+                // Keep the label within its segment.
+                if (len < along + 8 && t !== 0.5) continue;
+                const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+                const spots: Rect[] = vertical
+                    ? [
+                        { x: p.x + 8, y: p.y - size.h / 2, ...size },
+                        { x: p.x - 8 - size.w, y: p.y - size.h / 2, ...size },
+                    ]
+                    : [
+                        { x: p.x - size.w / 2, y: p.y - size.h - 6, ...size },
+                        { x: p.x - size.w / 2, y: p.y + 6, ...size },
+                    ];
+                for (const r of spots) {
+                    const pad = { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 };
+                    let cost = rank++ * 0.001 + (k === req.prefer ? 0 : 0.5) + (len < along + 8 ? 0.5 : 0);
+                    for (const box of boxes) if (overlaps(pad, box)) cost += 10;
+                    for (const other of [...placed, ...bandLabels]) if (overlaps(pad, other)) cost += 5;
+                    for (const seg of lines) if (!sameSeg(seg, req.segs[k]) && crossesRect(seg[0], seg[1], pad)) cost += 3;
+                    if (cost < best.cost) {
+                        best.rect = r;
+                        best.cost = cost;
+                    }
+                }
+            }
+            if (best.cost < 1) break;
+        }
+        if (!best.rect) continue;
+        placed.push(best.rect);
+        out.edge.push(make(best.rect.x, best.rect.y, req.text));
+    }
+}
+
+const same2 = (p: Pt, q: Pt) => Math.abs(p.x - q.x) < 0.01 && Math.abs(p.y - q.y) < 0.01;

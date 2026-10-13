@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { executeToolCalls, formatToolResult, layoutDiagram, parseOperation, type DiagramInput } from '../src';
 import type { Shape } from '../src/types';
+import { DIAGRAM_CASES } from '../eval/cases/diagrams';
+import { measureLayout } from '../eval/metrics';
 
 const ids = () => {
     let n = 0;
@@ -261,5 +263,27 @@ describe('add_diagram tool', () => {
         expect(results[0].ok).toBe(true);
         expect(Object.keys(results[0].nodes!)).toEqual(['x', 'y']);
         expect(formatToolResult(results[0])).toMatch(/^diagram drawn; node boxes: x=\S+, y=\S+/);
+    });
+});
+
+describe('layout quality over the benchmark cases', () => {
+    const cases = DIAGRAM_CASES.map((c) => ({ id: c.id, shapes: layoutDiagram(c.input, { createId: ids() }).shapes }));
+
+    it('draws every line straight across or along, never at a slant', () => {
+        for (const { id, shapes } of cases) {
+            for (const g of segmentsOf(shapes)) {
+                const slanted = Math.abs(g.x1 - g.x2) > 0.01 && Math.abs(g.y1 - g.y2) > 0.01;
+                expect(slanted, `${id}: (${g.x1}, ${g.y1}) → (${g.x2}, ${g.y2})`).toBe(false);
+            }
+        }
+    });
+
+    it('keeps edge labels clear of boxes, lines and each other, and lines apart', () => {
+        for (const { id, shapes } of cases) {
+            const m = measureLayout(shapes);
+            expect(m.labelOverlaps, id).toBe(0);
+            expect(m.closeParallels, id).toBe(0);
+            expect(m.edgeThroughBox, id).toBe(0);
+        }
     });
 });
