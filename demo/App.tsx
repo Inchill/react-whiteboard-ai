@@ -1,9 +1,9 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { describeCall } from './describeCall';
 import { EXAMPLE_GROUPS, loadExampleGroup, saveExampleGroup } from './examples';
-import { getLang, setLang, STRINGS, useLang, useT } from './i18n';
+import { getLang, setLang, STRINGS, useLang, useT, type Lang } from './i18n';
 import { SettingsPanel } from './SettingsPanel';
 import { callModel } from './modelRequest';
 import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
@@ -37,6 +37,18 @@ const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigat
 const UNDO_KEYS = isMac ? '⌘Z' : 'Ctrl+Z';
 
 const REPO_URL = 'https://github.com/Inchill/react-whiteboard-ai';
+
+/** Phones get the chat as a bottom sheet over the board instead of a side panel; matches the CSS breakpoint. */
+const NARROW = '(max-width: 760px)';
+const narrowQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(NARROW) : null;
+const subscribeNarrow = (cb: () => void) => {
+    narrowQuery?.addEventListener('change', cb);
+    return () => narrowQuery?.removeEventListener('change', cb);
+};
+const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => narrowQuery?.matches ?? false, () => false);
+
+/** How far a drag on the sheet's handle has to travel before it opens or closes the sheet. */
+const SWIPE = 40;
 
 /** The GitHub mark, drawn as an outline like react-whiteboard's own icon for it. */
 const GitHubIcon = () => (
@@ -76,6 +88,19 @@ export function App() {
     // a reply keeps streaming; the button that brings it back shows that work and any news.
     const [panelOpen, setPanelOpen] = useState(loadPanelOpen);
     const [unseen, setUnseen] = useState(false);
+    const narrow = useNarrow();
+    // On phones the chat is a sheet over the board: up while talking, down (a slim bar) to draw.
+    const [sheetUp, setSheetUp] = useState(true);
+    const sheetUpRef = useRef(sheetUp);
+    sheetUpRef.current = sheetUp;
+    const [dragY, setDragY] = useState<number | null>(null);
+    const drag = useRef<{ y: number; moved: boolean } | null>(null);
+    const moveSheet = (up: boolean) => {
+        setSheetUp(up);
+        if (up) setUnseen(false);
+        else setSettingsOpen(false);
+    };
+    const chatShown = narrow ? sheetUp : panelOpen;
     const collapseButton = useRef<HTMLButtonElement>(null);
     const reopenButton = useRef<HTMLButtonElement>(null);
     const togglePanel = (open: boolean) => {
@@ -146,9 +171,9 @@ export function App() {
     // New entries while the panel is folded light a dot on the button that opens it.
     const seenEntries = useRef(log.length);
     useEffect(() => {
-        if (!panelOpen && log.length > seenEntries.current) setUnseen(true);
+        if (!chatShown && log.length > seenEntries.current) setUnseen(true);
         seenEntries.current = log.length;
-    }, [log.length, panelOpen]);
+    }, [log.length, chatShown]);
 
     // Keep keyboard focus on the control that remains after folding or unfolding (only on a change,
     // not on load).
@@ -208,6 +233,8 @@ export function App() {
         setThoughtOpen(false);
         const stop = new AbortController();
         stopRef.current = stop;
+        // On a phone the sheet goes down by itself once a turn has drawn cleanly, to show the result.
+        let drewCleanly = false;
         // Messages written during this request use the language it started in.
         const t = STRINGS[getLang()];
         const messages: Message[] = [{ role: 'user', content: `Board:\n${JSON.stringify(ai.describe())}\n\n${prompt}` }];
@@ -282,7 +309,10 @@ export function App() {
                 const results = run(calls);
                 // When every call worked the drawing is done; going back to the model would only cost
                 // another full round trip for a closing sentence. Errors go back so it can fix them.
-                if (results.every((r) => r.ok)) break;
+                if (results.every((r) => r.ok)) {
+                    drewCleanly = true;
+                    break;
+                }
                 messages.push({
                     role: 'user',
                     content: results.map((r) => ({ type: 'tool_result', tool_use_id: r.id, content: formatToolResult(r), is_error: !r.ok })),
@@ -299,13 +329,56 @@ export function App() {
                 });
             } else push({ kind: 'error', text: t.failed(err instanceof Error ? err.message : String(err)) });
         } finally {
+            if (drewCleanly && !stop.signal.aborted && narrowQuery?.matches) {
+                // A short pause, so the last entry registers before the sheet slides away.
+                setTimeout(() => moveSheet(false), 600);
+            }
             cancelAnimationFrame(frame);
             setLive(null);
             stopRef.current = null;
             setBusy(false);
-            composer.current?.focus();
+            if (!narrowQuery?.matches) composer.current?.focus();
         }
     }
+
+    // Dragging the sheet's handle: it follows the finger, then settles up or down; a tap toggles it.
+    const onHandleDown = (e: ReactPointerEvent<HTMLElement>) => {
+        if (e.button !== 0) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { y: e.clientY, moved: false };
+    };
+    const onHandleMove = (e: ReactPointerEvent<HTMLElement>) => {
+        if (!drag.current) return;
+        const dy = e.clientY - drag.current.y;
+        if (Math.abs(dy) > 4) drag.current.moved = true;
+        if (drag.current.moved) setDragY(dy);
+    };
+    const onHandleUp = (e: ReactPointerEvent<HTMLElement>) => {
+        const d = drag.current;
+        drag.current = null;
+        setDragY(null);
+        if (!d) return;
+        const dy = e.clientY - d.y;
+        if (!d.moved) moveSheet(!sheetUpRef.current);
+        else if (dy > SWIPE) moveSheet(false);
+        else if (dy < -SWIPE) moveSheet(true);
+    };
+    const handleProps = {
+        onPointerDown: onHandleDown,
+        onPointerMove: onHandleMove,
+        onPointerUp: onHandleUp,
+        onPointerCancel: () => {
+            drag.current = null;
+            setDragY(null);
+        },
+    };
+    // While dragging, the sheet follows the finger from where it rests; CSS does the resting positions.
+    const sheetStyle =
+        narrow && dragY !== null
+            ? { transform: sheetUp ? `translateY(${Math.max(0, dragY)}px)` : `translateY(calc(100% - var(--peek-full) + ${Math.min(0, dragY)}px))`, transition: 'none' }
+            : undefined;
+    const lastEntry = log[log.length - 1];
+    const peekText = busy ? t.waiting : lastEntry ? summarize(lastEntry, lang) : t.sheetIdle;
 
     const onComposerKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         // Enter sends, Shift+Enter breaks the line; never send while an IME is composing (Chinese input).
@@ -318,10 +391,10 @@ export function App() {
     const connection = settings ? modelInfo(settings) : serverModel;
 
     return (
-        <div className={`demo${panelOpen ? '' : ' is-folded'}`}>
+        <div className={`demo${panelOpen || narrow ? '' : ' is-folded'}${narrow && !sheetUp ? ' is-sheet-down' : ''}`}>
             <main className="demo-board" aria-label={t.board}>
                 <Whiteboard ref={board} storageKey="react-whiteboard-ai-demo" locale={lang} />
-                {!panelOpen && (
+                {!panelOpen && !narrow && (
                     <div className="board-corner">
                         <a className="board-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label={t.viewSource} title="GitHub">
                             <GitHubIcon />
@@ -341,211 +414,256 @@ export function App() {
                 )}
             </main>
 
-            <aside className="panel" aria-label={t.assistant} inert={!panelOpen}>
-                <header className="panel-head">
-                    <h1>react-whiteboard-ai</h1>
-                    <a className="panel-icon panel-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label={t.viewSource} title="GitHub">
-                        <GitHubIcon />
-                    </a>
-                    <button
-                        ref={connectionButton}
-                        type="button"
-                        className={`connection${connection ? ' is-on' : ''}`}
-                        aria-expanded={settingsOpen}
-                        aria-haspopup="dialog"
-                        // The model name is cut short when the header is tight; the tooltip has it whole.
-                        title={connection ? `${connection.service} · ${connection.model}` : undefined}
-                        onClick={() => (settingsOpen ? closeSettings() : setSettingsOpen(true))}
-                    >
-                        <span className="connection-dot" aria-hidden />
-                        {connection ? (
-                            <>
-                                <strong>{connection.service}</strong>
-                                <span className="connection-model">{connection.model}</span>
-                                {import.meta.env.DEV && !settings && <span className="connection-model">（.env.local）</span>}
-                            </>
-                        ) : (
-                            <strong>{t.connectShort}</strong>
-                        )}
-                    </button>
-                    {settingsOpen && (
-                        <div ref={popover} className="popover" role="dialog" aria-label={t.connect}>
-                            <SettingsPanel
-                                settings={settings}
-                                hasServerKey={Boolean(serverModel)}
-                                onSave={(s) => {
-                                    saveSettings(s);
-                                    setSettings(s);
-                                    closeSettings(false);
-                                    composer.current?.focus();
-                                }}
-                                onClear={() => {
-                                    clearSettings();
-                                    setSettings(null);
-                                    closeSettings();
-                                }}
-                                onClose={() => closeSettings()}
-                            />
-                        </div>
-                    )}
-                    {/* On phones the switch moves up here, where the composer's footer line is dropped. */}
-                    <button type="button" className="panel-icon lang-switch-head" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label={t.switchLabel} title={t.switchLabel} lang={lang === 'zh' ? 'en' : 'zh-CN'}>
-                        {lang === 'zh' ? 'EN' : '中'}
-                    </button>
-                    <button ref={collapseButton} type="button" className="panel-icon panel-collapse" onClick={() => togglePanel(false)} aria-label={t.closeAssistant} title={t.close}>
-                        <svg viewBox="0 0 16 16" aria-hidden>
-                            <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
-                            <path d="M10.25 2.75v10.5M4.75 6.25 6.5 8l-1.75 1.75" />
+            {/* Phones: while the sheet is up, a tap on the board behind it puts the sheet away without drawing. */}
+            {narrow && sheetUp && <div className="sheet-scrim" aria-hidden onPointerDown={() => moveSheet(false)} />}
+            <aside className="panel" aria-label={t.assistant} inert={!chatShown && !narrow} style={sheetStyle}>
+                {/* Phones only: the grabber at the top of the sheet, and the slim bar it leaves when down. */}
+                <div className="sheet-grabber" aria-hidden {...handleProps}>
+                    <span />
+                </div>
+                <button
+                    type="button"
+                    className="sheet-peek"
+                    aria-label={t.sheetUp}
+                    aria-expanded={false}
+                    tabIndex={narrow && !sheetUp ? 0 : -1}
+                    {...handleProps}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            moveSheet(true);
+                        }
+                    }}
+                >
+                    <span className="sheet-peek-grabber" aria-hidden />
+                    <span className="sheet-peek-row">
+                        {busy ? <span className="spinner" aria-hidden /> : <span className={`sheet-peek-dot${unseen ? ' is-new' : ''}`} aria-hidden />}
+                        <span className="sheet-peek-text">{peekText}</span>
+                        <svg viewBox="0 0 16 16" className="sheet-peek-chevron" aria-hidden>
+                            <path d="M4 10l4-4 4 4" />
                         </svg>
-                    </button>
-                </header>
-
-                <section
-                    ref={logRef}
-                    className={`log${log.length || busy ? '' : ' is-empty'}`}
-                    aria-live="polite"
-                    aria-label={t.log}
-                    onScroll={(e) => {
-                        const el = e.currentTarget;
-                        followLog.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-                    }}
-                >
-                    {log.length === 0 && (
-                        <div className="log-empty">
-                            <p className="log-empty-title">{t.emptyTitle}</p>
-                            <p>
-                                {t.emptyExamples}
-                                {canAsk ? t.emptyCanAsk : t.emptyConnect}
-                            </p>
-                        </div>
-                    )}
-                    {log.map((entry, i) => (
-                        <LogItem key={i} entry={entry} index={i} onOpenSettings={() => setSettingsOpen(true)} />
-                    ))}
-                    {live && (
-                        <LiveReply
-                            message={live}
-                            thoughtOpen={thoughtOpen}
-                            onToggleThought={toggleThought}
-                            thinkingSeconds={thinking.current.start ? Math.max(0, Math.round((now - thinking.current.start) / 1000)) : 0}
-                        />
-                    )}
-                    {busy && !live?.blocks.some((b) => b && b.type !== 'other') && (
-                        <p className="working" role="status">
-                            <span className="spinner" aria-hidden />
-                            <span className="trim">{t.waiting}</span>
-                        </p>
-                    )}
-                </section>
-
-                <form
-                    className={`composer${log.length ? ' has-log' : ''}`}
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        void ask(input);
-                    }}
-                >
-                    {!busy && (
-                        <div className="examples">
-                            <div className="examples-tabs" role="tablist" aria-label={t.exampleGroups}>
-                                {groups.map((g) => (
-                                    <button
-                                        key={g.id}
-                                        type="button"
-                                        role="tab"
-                                        id={`examples-tab-${g.id}`}
-                                        aria-selected={g.id === examples.id}
-                                        aria-controls="examples-panel"
-                                        onClick={() => {
-                                            saveExampleGroup(g.id);
-                                            setExampleGroup(g.id);
-                                        }}
-                                    >
-                                        {g.label}
-                                    </button>
-                                ))}
+                    </span>
+                </button>
+                <div className="panel-body" inert={narrow && !sheetUp}>
+                    <header className="panel-head">
+                        <h1>react-whiteboard-ai</h1>
+                        <a className="panel-icon panel-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label={t.viewSource} title="GitHub">
+                            <GitHubIcon />
+                        </a>
+                        <button
+                            ref={connectionButton}
+                            type="button"
+                            className={`connection${connection ? ' is-on' : ''}`}
+                            aria-expanded={settingsOpen}
+                            aria-haspopup="dialog"
+                            // The model name is cut short when the header is tight; the tooltip has it whole.
+                            title={connection ? `${connection.service} · ${connection.model}` : undefined}
+                            onClick={() => (settingsOpen ? closeSettings() : setSettingsOpen(true))}
+                        >
+                            <span className="connection-dot" aria-hidden />
+                            {connection ? (
+                                <>
+                                    <strong>{connection.service}</strong>
+                                    <span className="connection-model">{connection.model}</span>
+                                    {import.meta.env.DEV && !settings && <span className="connection-model">（.env.local）</span>}
+                                </>
+                            ) : (
+                                <strong>{t.connectShort}</strong>
+                            )}
+                        </button>
+                        {settingsOpen && (
+                            <div ref={popover} className="popover" role="dialog" aria-label={t.connect}>
+                                <SettingsPanel
+                                    settings={settings}
+                                    hasServerKey={Boolean(serverModel)}
+                                    onSave={(s) => {
+                                        saveSettings(s);
+                                        setSettings(s);
+                                        closeSettings(false);
+                                        composer.current?.focus();
+                                    }}
+                                    onClear={() => {
+                                        clearSettings();
+                                        setSettings(null);
+                                        closeSettings();
+                                    }}
+                                    onClose={() => closeSettings()}
+                                />
                             </div>
-                            <div className="composer-examples" role="tabpanel" id="examples-panel" aria-labelledby={`examples-tab-${examples.id}`}>
-                                {examples.examples.map((ex) => (
-                                    <button key={ex.label} type="button" onClick={() => void ask(ex.prompt, true)} title={ex.prompt}>
-                                        {ex.label}
-                                    </button>
-                                ))}
-                            </div>
-                            {examples.hint && !deepThinking && <p className="examples-hint">{examples.hint}</p>}
-                        </div>
-                    )}
-                    <div
-                        className={`composer-box${!canAsk ? ' is-off' : ''}`}
-                        // A click anywhere on the box (not on its buttons) puts the cursor in the text.
-                        onMouseDown={(e) => {
-                            if (e.target === e.currentTarget) {
-                                e.preventDefault();
-                                composer.current?.focus();
-                            }
+                        )}
+                        {/* On phones the switch moves up here, where the composer's footer line is dropped. */}
+                        <button type="button" className="panel-icon lang-switch-head" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label={t.switchLabel} title={t.switchLabel} lang={lang === 'zh' ? 'en' : 'zh-CN'}>
+                            {lang === 'zh' ? 'EN' : '中'}
+                        </button>
+                        <button ref={collapseButton} type="button" className="panel-icon panel-collapse" onClick={() => (narrow ? moveSheet(false) : togglePanel(false))} aria-label={narrow ? t.sheetDown : t.closeAssistant} title={t.close}>
+                            <svg viewBox="0 0 16 16" aria-hidden>
+                                <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
+                                <path d="M10.25 2.75v10.5M4.75 6.25 6.5 8l-1.75 1.75" />
+                            </svg>
+                        </button>
+                    </header>
+
+                    <section
+                        ref={logRef}
+                        className={`log${log.length || busy ? '' : ' is-empty'}`}
+                        aria-live="polite"
+                        aria-label={t.log}
+                        onScroll={(e) => {
+                            const el = e.currentTarget;
+                            followLog.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
                         }}
                     >
-                        <textarea
-                            ref={composer}
-                            value={input}
-                            rows={1}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={onComposerKey}
-                            placeholder={canAsk ? t.placeholder : t.placeholderOff}
-                            disabled={!canAsk || busy}
-                            aria-label={t.composerLabel}
-                        />
-                        <div className="composer-tools">
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={deepThinking}
-                                className="think-toggle"
-                                title={t.thinkTitle}
-                                onClick={() => {
-                                    saveThinking(!deepThinking);
-                                    setDeepThinking(!deepThinking);
-                                }}
-                            >
-                                <svg viewBox="0 0 16 16" aria-hidden>
-                                    <path d="M8 1.75a4.25 4.25 0 0 0-2.4 7.76c.4.27.65.72.65 1.2v.54h3.5v-.54c0-.48.25-.93.65-1.2A4.25 4.25 0 0 0 8 1.75ZM6.25 13h3.5M6.75 14.75h2.5" />
-                                </svg>
-                                <span className="think-label">{t.think}</span>
-                            </button>
-                            {busy ? (
-                                <button type="button" className="send is-stop" onClick={() => stopRef.current?.abort()} aria-label={t.stop} title={t.stop}>
+                        {log.length === 0 && (
+                            <div className="log-empty">
+                                <p className="log-empty-title">{t.emptyTitle}</p>
+                                <p>
+                                    {t.emptyExamples}
+                                    {canAsk ? t.emptyCanAsk : t.emptyConnect}
+                                </p>
+                            </div>
+                        )}
+                        {log.map((entry, i) => (
+                            <LogItem key={i} entry={entry} index={i} onOpenSettings={() => setSettingsOpen(true)} />
+                        ))}
+                        {live && (
+                            <LiveReply
+                                message={live}
+                                thoughtOpen={thoughtOpen}
+                                onToggleThought={toggleThought}
+                                thinkingSeconds={thinking.current.start ? Math.max(0, Math.round((now - thinking.current.start) / 1000)) : 0}
+                            />
+                        )}
+                        {busy && !live?.blocks.some((b) => b && b.type !== 'other') && (
+                            <p className="working" role="status">
+                                <span className="spinner" aria-hidden />
+                                <span className="trim">{t.waiting}</span>
+                            </p>
+                        )}
+                    </section>
+
+                    <form
+                        className="composer"
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            void ask(input);
+                        }}
+                    >
+                        {!busy && (
+                            <div className="examples">
+                                <div className="examples-tabs" role="tablist" aria-label={t.exampleGroups}>
+                                    {groups.map((g) => (
+                                        <button
+                                            key={g.id}
+                                            type="button"
+                                            role="tab"
+                                            id={`examples-tab-${g.id}`}
+                                            aria-selected={g.id === examples.id}
+                                            aria-controls="examples-panel"
+                                            onClick={() => {
+                                                saveExampleGroup(g.id);
+                                                setExampleGroup(g.id);
+                                            }}
+                                        >
+                                            {g.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="composer-examples" role="tabpanel" id="examples-panel" aria-labelledby={`examples-tab-${examples.id}`}>
+                                    {examples.examples.map((ex) => (
+                                        <button key={ex.label} type="button" onClick={() => void ask(ex.prompt, true)} title={ex.prompt}>
+                                            {ex.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                {examples.hint && !deepThinking && <p className="examples-hint">{examples.hint}</p>}
+                            </div>
+                        )}
+                        <div
+                            className={`composer-box${!canAsk ? ' is-off' : ''}`}
+                            // A click anywhere on the box (not on its buttons) puts the cursor in the text.
+                            onMouseDown={(e) => {
+                                if (e.target === e.currentTarget) {
+                                    e.preventDefault();
+                                    composer.current?.focus();
+                                }
+                            }}
+                        >
+                            <textarea
+                                ref={composer}
+                                value={input}
+                                rows={1}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={onComposerKey}
+                                placeholder={canAsk ? t.placeholder : t.placeholderOff}
+                                disabled={!canAsk || busy}
+                                aria-label={t.composerLabel}
+                            />
+                            <div className="composer-tools">
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={deepThinking}
+                                    className="think-toggle"
+                                    title={t.thinkTitle}
+                                    onClick={() => {
+                                        saveThinking(!deepThinking);
+                                        setDeepThinking(!deepThinking);
+                                    }}
+                                >
                                     <svg viewBox="0 0 16 16" aria-hidden>
-                                        <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+                                        <path d="M8 1.75a4.25 4.25 0 0 0-2.4 7.76c.4.27.65.72.65 1.2v.54h3.5v-.54c0-.48.25-.93.65-1.2A4.25 4.25 0 0 0 8 1.75ZM6.25 13h3.5M6.75 14.75h2.5" />
                                     </svg>
+                                    <span className="think-label">{t.think}</span>
                                 </button>
-                            ) : canAsk ? (
-                                <button type="submit" className="send" disabled={!input.trim()} aria-label={t.send} title={t.sendTitle}>
-                                    <svg viewBox="0 0 16 16" aria-hidden>
-                                        <path d="M8 13V3.5M3.75 7.5 8 3.25l4.25 4.25" />
-                                    </svg>
-                                </button>
-                            ) : (
-                                <button type="button" className="send-connect" onClick={() => setSettingsOpen(true)}>
-                                    {t.connect}
-                                </button>
-                            )}
+                                {busy ? (
+                                    <button type="button" className="send is-stop" onClick={() => stopRef.current?.abort()} aria-label={t.stop} title={t.stop}>
+                                        <svg viewBox="0 0 16 16" aria-hidden>
+                                            <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+                                        </svg>
+                                    </button>
+                                ) : canAsk ? (
+                                    <button type="submit" className="send" disabled={!input.trim()} aria-label={t.send} title={t.sendTitle}>
+                                        <svg viewBox="0 0 16 16" aria-hidden>
+                                            <path d="M8 13V3.5M3.75 7.5 8 3.25l4.25 4.25" />
+                                        </svg>
+                                    </button>
+                                ) : (
+                                    <button type="button" className="send-connect" onClick={() => setSettingsOpen(true)}>
+                                        {t.connect}
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                    <div className="composer-foot">
-                        <p className="composer-hint">{t.composerHint(UNDO_KEYS)}</p>
-                        {/* Named in the other language, so it reads as the way out to anyone who cannot read this one. */}
-                        <button type="button" className="lang-switch" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label={t.switchLabel} title={t.switchLabel} lang={lang === 'zh' ? 'en' : 'zh-CN'}>
-                            <svg viewBox="0 0 16 16" aria-hidden>
-                                <circle cx="8" cy="8" r="6.25" />
-                                <path d="M1.75 8h12.5M8 1.75c1.7 1.8 2.5 3.9 2.5 6.25S9.7 12.45 8 14.25C6.3 12.45 5.5 10.35 5.5 8S6.3 3.55 8 1.75Z" />
-                            </svg>
-                            {t.switchTo}
-                        </button>
-                    </div>
-                </form>
+                        <div className="composer-foot">
+                            <p className="composer-hint">{t.composerHint(UNDO_KEYS)}</p>
+                            {/* Named in the other language, so it reads as the way out to anyone who cannot read this one. */}
+                            <button type="button" className="lang-switch" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label={t.switchLabel} title={t.switchLabel} lang={lang === 'zh' ? 'en' : 'zh-CN'}>
+                                <svg viewBox="0 0 16 16" aria-hidden>
+                                    <circle cx="8" cy="8" r="6.25" />
+                                    <path d="M1.75 8h12.5M8 1.75c1.7 1.8 2.5 3.9 2.5 6.25S9.7 12.45 8 14.25C6.3 12.45 5.5 10.35 5.5 8S6.3 3.55 8 1.75Z" />
+                                </svg>
+                                {t.switchTo}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </aside>
         </div>
     );
+}
+
+/** One line about a log entry for the sheet's slim bar. */
+function summarize(entry: LogEntry, lang: Lang): string {
+    switch (entry.kind) {
+        case 'calls': {
+            const i = entry.calls.length - 1;
+            return describeCall(entry.calls[i], entry.results[i], lang).title;
+        }
+        case 'thought':
+            return STRINGS[lang].thought(entry.seconds);
+        default:
+            return entry.text;
+    }
 }
 
 function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: number; onOpenSettings: () => void }) {

@@ -1296,23 +1296,177 @@ button:disabled {
     overscroll-behavior: contain;
 }
 
+/* Phone-only parts of the chat sheet. */
+.sheet-grabber,
+.sheet-peek,
+.sheet-scrim {
+    display: none;
+}
+.panel-body {
+    display: contents;
+}
+
+.connection {
+    overflow: hidden;
+}
+/* The service name stays whole; the model name after it is what gets cut short. */
+.connection strong {
+    flex: none;
+}
+
 @media (max-width: 760px) {
-    /* Phones: the page never scrolls. The board takes what the panel leaves, and the panel is
-       capped so the board keeps most of the screen; the log scrolls inside the panel. */
+    /* Phones: the board fills the screen and the chat is a sheet over it. Up, it holds the
+       conversation; down, it leaves a slim bar with the latest step, which a tap or an upward
+       swipe brings back. The board stops above that bar, so its toolbar stays in reach. */
     .demo {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: minmax(0, 1fr) auto;
+        --peek: 56px;
+        --peek-full: calc(var(--peek) + env(safe-area-inset-bottom));
+        display: block;
+        position: relative;
         height: 100dvh;
+        overflow: hidden;
+    }
+
+    .demo-board {
+        position: absolute;
+        inset: 0 0 var(--peek-full);
+    }
+
+    .sheet-scrim {
+        display: block;
+        position: absolute;
+        inset: 0;
+        z-index: 29;
+        background: rgba(10, 12, 20, 0.12);
+        animation: sheet-fade 0.2s ease-out;
     }
 
     .panel {
-        max-height: 40dvh;
-        border-left: 0;
-        border-top: 1px solid var(--line);
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 30;
+        max-height: 80dvh;
+        padding-bottom: env(safe-area-inset-bottom);
+        border: 0;
+        border-radius: 18px 18px 0 0;
+        box-shadow:
+            0 -1px 0 var(--line),
+            0 -10px 32px rgba(10, 12, 20, 0.14);
+        transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .demo.is-sheet-down .panel {
+        transform: translateY(calc(100% - var(--peek-full)));
+    }
+
+    .panel-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .sheet-grabber {
+        display: flex;
+        justify-content: center;
+        padding: 8px 0 0;
+        touch-action: none;
+        cursor: grab;
+    }
+    .sheet-grabber span,
+    .sheet-peek-grabber {
+        width: 36px;
+        height: 5px;
+        border-radius: 3px;
+        background: var(--line-strong);
+    }
+
+    /* The bar the sheet leaves when down: it covers the sheet's top and fades in. */
+    .sheet-peek {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 2;
+        height: var(--peek-full);
+        padding: 8px 16px env(safe-area-inset-bottom);
+        border: 0;
+        border-radius: 18px 18px 0 0;
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+        text-align: left;
+        opacity: 0;
+        pointer-events: none;
+        touch-action: none;
+        transition: opacity 0.2s;
+    }
+    .demo.is-sheet-down .sheet-peek {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .sheet-peek-grabber {
+        align-self: center;
+        flex: none;
+    }
+    .sheet-peek-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+    }
+    .sheet-peek-dot {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--line-strong);
+    }
+    .sheet-peek-dot.is-new {
+        background: var(--blue);
+    }
+    .sheet-peek-text {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .sheet-peek-chevron {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: var(--muted);
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
     }
 
     .panel-head {
-        padding: 8px 12px 8px 16px;
+        padding: 6px 12px 10px 16px;
+    }
+
+    /* The model name would push the header over; the service name says enough here, and it is
+       the title that gives way when the row is still too narrow. */
+    .connection-model {
+        display: none;
+    }
+    .connection {
+        flex: none;
+    }
+    .panel-head h1 {
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 16px;
     }
 
     .settings,
@@ -1334,11 +1488,10 @@ button:disabled {
 
     .composer {
         gap: 8px;
-        padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+        padding: 10px 16px 12px;
     }
 
-    /* Examples in one row that scrolls sideways. Once the conversation has started, only the chips
-       of the chosen group stay. */
+    /* Examples in one row that scrolls sideways. */
     .composer-examples {
         flex-wrap: nowrap;
         overflow-x: auto;
@@ -1352,8 +1505,7 @@ button:disabled {
     .composer-examples > button {
         flex: none;
     }
-    .examples-hint,
-    .composer.has-log .examples-tabs {
+    .examples-hint {
         display: none;
     }
 
@@ -1396,9 +1548,17 @@ button:disabled {
     .lang-switch-head {
         display: grid;
     }
+}
 
-    .demo.is-folded {
-        grid-template-rows: minmax(0, 1fr);
+@keyframes sheet-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+    .panel {
+        transition: none;
     }
 }
 
