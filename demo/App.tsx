@@ -3,6 +3,7 @@ import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { describeCall } from './describeCall';
 import { EXAMPLE_GROUPS, loadExampleGroup, saveExampleGroup } from './examples';
+import { applyTheme, BOARD_KEY } from './theme';
 import { getLang, setLang, STRINGS, useLang, useT, type Lang } from './i18n';
 import { SettingsPanel } from './SettingsPanel';
 import { callModel } from './modelRequest';
@@ -393,7 +394,7 @@ export function App() {
     return (
         <div className={`demo${panelOpen || narrow ? '' : ' is-folded'}${narrow && !sheetUp ? ' is-sheet-down' : ''}`}>
             <main className="demo-board" aria-label={t.board}>
-                <Whiteboard ref={board} storageKey="react-whiteboard-ai-demo" locale={lang} />
+                <Whiteboard ref={board} storageKey={BOARD_KEY} locale={lang} onThemeChange={applyTheme} />
                 {!panelOpen && !narrow && (
                     <div className="board-corner">
                         <a className="board-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label={t.viewSource} title="GitHub">

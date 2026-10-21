@@ -4,6 +4,7 @@ import '@fontsource-variable/bricolage-grotesque/opsz.css';
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@inchill/react-whiteboard/style.css';
 import './demo.css';
+import './theme';
 import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(
