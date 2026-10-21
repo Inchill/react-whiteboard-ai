@@ -23,24 +23,23 @@
     color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #0f1116;
-        --surface: #171a21;
-        --surface-sunk: #1f232c;
-        --ink: #eceef3;
-        --muted: #9aa1b0;
-        --line: rgba(236, 238, 243, 0.1);
-        --line-strong: rgba(236, 238, 243, 0.2);
-        --blue: #7d97ff;
-        --blue-ink: #0f1116;
-        --green: #38d9a9;
-        --red: #ff6b6b;
-        --note: #f3e48a;
-        --tape: rgba(255, 255, 255, 0.35);
-        --code-bg: #0a0b0f;
-        color-scheme: dark;
-    }
+/* Dark tokens follow the board's own theme toggle (see theme.ts), not only the system setting. */
+:root[data-theme='dark'] {
+    --bg: #0f1116;
+    --surface: #171a21;
+    --surface-sunk: #1f232c;
+    --ink: #eceef3;
+    --muted: #9aa1b0;
+    --line: rgba(236, 238, 243, 0.1);
+    --line-strong: rgba(236, 238, 243, 0.2);
+    --blue: #7d97ff;
+    --blue-ink: #0f1116;
+    --green: #38d9a9;
+    --red: #ff6b6b;
+    --note: #f3e48a;
+    --tape: rgba(255, 255, 255, 0.35);
+    --code-bg: #0a0b0f;
+    color-scheme: dark;
 }
 
 *,
@@ -230,21 +229,19 @@ button:disabled {
     transform: rotate(45deg);
 }
 
-@media (prefers-color-scheme: dark) {
-    .popover::before {
-        box-shadow: -1px -1px 0 rgba(255, 255, 255, 0.08);
-    }
+:root[data-theme='dark'] .popover::before {
+    box-shadow: -1px -1px 0 rgba(255, 255, 255, 0.08);
+}
 
-    .popover {
-        --pop-bg: #262932;
-        --pop-field: #1f222a;
-        --pop-line: rgba(255, 255, 255, 0.12);
-        --pop-raised: #353a45;
-        box-shadow:
-            0 0 0 1px rgba(255, 255, 255, 0.08),
-            0 4px 10px rgba(0, 0, 0, 0.3),
-            0 24px 56px -12px rgba(0, 0, 0, 0.7);
-    }
+:root[data-theme='dark'] .popover {
+    --pop-bg: #262932;
+    --pop-field: #1f222a;
+    --pop-line: rgba(255, 255, 255, 0.12);
+    --pop-raised: #353a45;
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 4px 10px rgba(0, 0, 0, 0.3),
+        0 24px 56px -12px rgba(0, 0, 0, 0.7);
 }
 
 @keyframes pop-in {
