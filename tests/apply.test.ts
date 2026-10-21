@@ -95,3 +95,49 @@ describe('executeToolCalls', () => {
         expect(formatToolResult(results[2])).toBe('deleted r');
     });
 });
+
+describe('keeping new content clear of the board', () => {
+    type Rect = Extract<Shape, { w: number; fill: unknown }>;
+    const box = (id: string, x: number, y: number, w = 100, h = 50): Rect => ({ ...(rect as Rect), id, x, y, w, h });
+    const overlapsAny = (r: Rect, others: Rect[]) => others.some((b) => r.x < b.x + b.w && b.x < r.x + r.w && r.y < b.y + b.h && b.y < r.y + r.h);
+
+    it('moves a standalone add_shapes group that lands on existing shapes, as one piece', () => {
+        const board = [box('a', 0, 0), box('b', 200, 0)];
+        const { shapes, results } = applyOperations(board, [
+            { op: 'add_shapes', shapes: [{ type: 'rect', x: 150, y: 10, w: 100, h: 50 }, { type: 'rect', x: 150, y: 80, w: 100, h: 50 }] },
+        ], { createId: ids() });
+        const [n1, n2] = shapes.slice(2) as Rect[];
+        expect(overlapsAny(n1, board)).toBe(false);
+        expect(overlapsAny(n2, board)).toBe(false);
+        // Relative layout inside the group is kept.
+        expect(n2.x - n1.x).toBe(0);
+        expect(n2.y - n1.y).toBe(70);
+        expect(results[0].notes?.[0]).toMatch(/do not overlap/);
+    });
+
+    it('leaves annotations where the model put them', () => {
+        const board = [box('a', 0, 0, 200, 100)];
+        const { shapes, results } = applyOperations(board, [
+            { op: 'add_shapes', shapes: [{ type: 'text', x: 20, y: 20, text: 'label' }, { type: 'arrow', x1: 300, y1: 50, x2: 205, y2: 50 }] },
+        ], { createId: ids() });
+        expect(shapes[1]).toMatchObject({ x: 20, y: 20 });
+        expect(results[0].notes).toBeUndefined();
+    });
+
+    it('moves a diagram placed by the model on top of existing content', () => {
+        const board = [box('a', 0, 0, 300, 200)];
+        const { shapes, results } = applyOperations(board, [
+            { op: 'add_diagram', diagram: { x: 50, y: 50, nodes: [{ id: 'x', label: 'X' }, { id: 'y', label: 'Y' }], edges: [{ from: 'x', to: 'y' }] } },
+        ], { createId: ids() });
+        const added = shapes.slice(1).filter((s): s is Rect => s.type === 'rect');
+        expect(added.every((s) => !overlapsAny(s, board))).toBe(true);
+        expect(results[0].notes?.[0]).toMatch(/do not overlap/);
+    });
+
+    it('does not touch content placed in free space', () => {
+        const board = [box('a', 0, 0)];
+        const { shapes, results } = applyOperations(board, [{ op: 'add_shapes', shapes: [{ type: 'rect', x: 400, y: 0, w: 50, h: 50 }] }], { createId: ids() });
+        expect(shapes[1]).toMatchObject({ x: 400, y: 0 });
+        expect(results[0].notes).toBeUndefined();
+    });
+});

@@ -85,6 +85,58 @@ export function unionBox(boxes: Box[]): Box | null {
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
+/** Whether two boxes overlap once one of them is grown by `gap` on every side. Touching edges do not count. */
+export function boxesOverlap(a: Box, b: Box, gap = 0): boolean {
+    return a.x - gap < b.x + b.w && b.x < a.x + a.w + gap && a.y - gap < b.y + b.h && b.y < a.y + a.h + gap;
+}
+
+/** Whether `outer` fully contains `inner`. */
+export function boxContains(outer: Box, inner: Box): boolean {
+    return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
+}
+
+/**
+ * The smallest move that puts `box` at least `gap` away from every obstacle.
+ * Returns { dx: 0, dy: 0 } when it is already clear. Candidates sit on each side of each
+ * obstacle (keeping the other coordinate), so the result stays close to where the box was meant to go;
+ * if none of them is clear, the box goes to the right of everything.
+ */
+export function clearOffset(box: Box, obstacles: Box[], gap = 40): { dx: number; dy: number } {
+    const blocked = (b: Box) => obstacles.some((o) => boxesOverlap(b, o, gap));
+    if (!blocked(box)) return { dx: 0, dy: 0 };
+
+    const xs = new Set<number>([box.x]);
+    const ys = new Set<number>([box.y]);
+    for (const o of obstacles) {
+        xs.add(o.x + o.w + gap);
+        xs.add(o.x - gap - box.w);
+        ys.add(o.y + o.h + gap);
+        ys.add(o.y - gap - box.h);
+    }
+    let best = null as { dx: number; dy: number; d: number } | null;
+    const consider = (x: number, y: number) => {
+        const dx = x - box.x;
+        const dy = y - box.y;
+        const d = Math.hypot(dx, dy);
+        if (best && d >= best.d) return;
+        if (!blocked({ ...box, x, y })) best = { dx, dy, d };
+    };
+    // Moves along one axis first; the distance check keeps the nearest clear one.
+    for (const x of xs) consider(x, box.y);
+    for (const y of ys) consider(box.x, y);
+    if (!best) {
+        // Diagonal moves around the obstacles actually in the way (all pairs would be quadratic on a busy board).
+        const near = obstacles.filter((o) => boxesOverlap(box, o, gap));
+        const dxs = [box.x, ...near.flatMap((o) => [o.x + o.w + gap, o.x - gap - box.w])];
+        const dys = [box.y, ...near.flatMap((o) => [o.y + o.h + gap, o.y - gap - box.h])];
+        for (const x of dxs) for (const y of dys) consider(x, y);
+    }
+    if (best) return { dx: best.dx, dy: best.dy };
+
+    const all = unionBox(obstacles)!;
+    return { dx: all.x + all.w + gap - box.x, dy: all.y - box.y };
+}
+
 export function translateShape(shape: Shape, dx: number, dy: number): Shape {
     switch (shape.type) {
         case 'pen':
