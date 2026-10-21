@@ -1276,43 +1276,297 @@ button:disabled {
 
 /* ---- narrow screens: board on top, panel below ---- */
 
+.lang-switch-head {
+    display: none;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+/* The board's menu opens downward from its top-left corner; on a short board it would run under
+   the bottom toolbar and out of view, so it scrolls within the board and sits above the toolbar. */
+.demo-board {
+    container-type: size;
+}
+.demo-board .rwb-top-left {
+    z-index: 4;
+}
+.demo-board .rwb-menu {
+    max-height: calc(100cqh - 72px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Phone-only parts of the chat sheet. */
+.sheet-grabber,
+.sheet-peek,
+.sheet-scrim {
+    display: none;
+}
+.panel-body {
+    display: contents;
+}
+
+.connection {
+    overflow: hidden;
+}
+/* The service name stays whole; the model name after it is what gets cut short. */
+.connection strong {
+    flex: none;
+}
+
 @media (max-width: 760px) {
+    /* Phones: the board fills the screen and the chat is a sheet over it. Up, it holds the
+       conversation; down, it leaves a slim bar with the latest step, which a tap or an upward
+       swipe brings back. The board stops above that bar, so its toolbar stays in reach. */
     .demo {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: 58vh auto;
-        height: auto;
+        --peek: 56px;
+        --peek-full: calc(var(--peek) + env(safe-area-inset-bottom));
+        display: block;
+        position: relative;
+        height: 100dvh;
+        overflow: hidden;
     }
 
     .demo-board {
-        height: 58vh;
+        position: absolute;
+        inset: 0 0 var(--peek-full);
+    }
+
+    .sheet-scrim {
+        display: block;
+        position: absolute;
+        inset: 0;
+        z-index: 29;
+        background: rgba(10, 12, 20, 0.12);
+        animation: sheet-fade 0.2s ease-out;
     }
 
     .panel {
-        border-left: 0;
-        border-top: 1px solid var(--line);
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 30;
+        max-height: 80dvh;
+        padding-bottom: env(safe-area-inset-bottom);
+        border: 0;
+        border-radius: 18px 18px 0 0;
+        box-shadow:
+            0 -1px 0 var(--line),
+            0 -10px 32px rgba(10, 12, 20, 0.14);
+        transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .demo.is-sheet-down .panel {
+        transform: translateY(calc(100% - var(--peek-full)));
     }
 
-    .panel-head,
+    .panel-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .sheet-grabber {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        padding: 8px 0 4px;
+        border: 0;
+        background: none;
+        touch-action: none;
+        cursor: grab;
+    }
+
+    /* The grabber, a swipe and a tap on the board already put the sheet away. */
+    .panel-collapse {
+        display: none;
+    }
+    .sheet-grabber span,
+    .sheet-peek-grabber {
+        width: 36px;
+        height: 5px;
+        border-radius: 3px;
+        background: var(--line-strong);
+    }
+
+    /* The bar the sheet leaves when down: it covers the sheet's top and fades in. */
+    .sheet-peek {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 2;
+        height: var(--peek-full);
+        padding: 8px 16px env(safe-area-inset-bottom);
+        border: 0;
+        border-radius: 18px 18px 0 0;
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+        text-align: left;
+        opacity: 0;
+        pointer-events: none;
+        touch-action: none;
+        transition: opacity 0.2s;
+    }
+    .demo.is-sheet-down .sheet-peek {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .sheet-peek-grabber {
+        align-self: center;
+        flex: none;
+    }
+    .sheet-peek-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+    }
+    .sheet-peek-dot {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--line-strong);
+    }
+    .sheet-peek-dot.is-new {
+        background: var(--blue);
+    }
+    .sheet-peek-text {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .sheet-peek-chevron {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: var(--muted);
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .panel-head {
+        padding: 2px 12px 10px 16px;
+    }
+
+    /* The model name would push the header over; the service name says enough here, and it is
+       the title that gives way when the row is still too narrow. */
+    .connection-model {
+        display: none;
+    }
+    .connection {
+        flex: none;
+    }
+    .panel-head h1 {
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 16px;
+    }
+
     .settings,
     .log {
         padding-left: 16px;
         padding-right: 16px;
     }
 
-    .composer {
-        padding: 12px 16px 16px;
-    }
-
     .log {
-        max-height: 60vh;
+        padding-top: 12px;
+        padding-bottom: 12px;
+        gap: 10px;
     }
 
-    .demo.is-folded {
-        grid-template-rows: 100dvh;
+    /* Before the first prompt the examples say what to do; the empty log would only take room. */
+    .log.is-empty {
+        display: none;
     }
 
-    .demo.is-folded .demo-board {
-        height: 100dvh;
+    .composer {
+        gap: 8px;
+        padding: 10px 16px 12px;
+    }
+
+    /* Examples in one row that scrolls sideways. */
+    .composer-examples {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        margin: 0 -16px;
+        padding: 0 16px 2px;
+        scrollbar-width: none;
+    }
+    .composer-examples::-webkit-scrollbar {
+        display: none;
+    }
+    .composer-examples > button {
+        flex: none;
+    }
+    .examples-hint {
+        display: none;
+    }
+
+    /* The input and its buttons share one line; deep thinking shows as its icon only. */
+    .composer-box {
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 6px;
+        padding: 6px 6px 6px 12px;
+    }
+    .composer textarea {
+        flex: 1;
+        min-width: 0;
+        min-height: 32px;
+        padding-top: 4px;
+    }
+    .composer-tools {
+        flex: none;
+        gap: 6px;
+    }
+    .think-toggle {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        justify-content: center;
+    }
+    .think-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    /* Keyboard hints mean nothing on a phone, and the language switch moves to the header. */
+    .composer .composer-foot {
+        display: none;
+    }
+    .lang-switch-head {
+        display: grid;
+    }
+}
+
+@keyframes sheet-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+    .panel {
+        transition: none;
     }
 }
 
