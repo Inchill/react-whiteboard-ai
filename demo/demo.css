@@ -1315,3 +1315,41 @@ button:disabled {
         height: 100dvh;
     }
 }
+
+/* The hint and the language switch share the line under the composer. */
+.composer-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.composer-foot .composer-hint {
+    flex: 1;
+    min-width: 0;
+}
+.lang-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+    margin: -2px 0 0;
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.lang-switch:hover {
+    background: var(--surface-sunk);
+    color: var(--ink);
+}
+.lang-switch svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+}

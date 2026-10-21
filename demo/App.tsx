@@ -3,6 +3,7 @@ import { Whiteboard, type WhiteboardHandle } from '@inchill/react-whiteboard';
 import { formatToolResult, useWhiteboardAI, type ToolCall, type ToolCallResult } from '../src';
 import { describeCall } from './describeCall';
 import { EXAMPLE_GROUPS, loadExampleGroup, saveExampleGroup } from './examples';
+import { getLang, setLang, STRINGS, useLang, useT } from './i18n';
 import { SettingsPanel } from './SettingsPanel';
 import { callModel } from './modelRequest';
 import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
@@ -83,8 +84,11 @@ export function App() {
         if (open) setUnseen(false);
         else setSettingsOpen(false);
     };
+    const lang = useLang();
+    const t = STRINGS[lang];
+    const groups = EXAMPLE_GROUPS[lang];
     const [exampleGroup, setExampleGroup] = useState(loadExampleGroup);
-    const examples = EXAMPLE_GROUPS.find((g) => g.id === exampleGroup) ?? EXAMPLE_GROUPS[0];
+    const examples = groups.find((g) => g.id === exampleGroup) ?? groups[0];
     const logRef = useRef<HTMLElement>(null);
     // Follow new entries while the reader is at the bottom of the log; scrolling up to read stops it.
     const followLog = useRef(true);
@@ -204,6 +208,8 @@ export function App() {
         setThoughtOpen(false);
         const stop = new AbortController();
         stopRef.current = stop;
+        // Messages written during this request use the language it started in.
+        const t = STRINGS[getLang()];
         const messages: Message[] = [{ role: 'user', content: `Board:\n${JSON.stringify(ai.describe())}\n\n${prompt}` }];
         // Stream updates arrive many times a second; render at most once per frame.
         let frame = 0;
@@ -237,8 +243,8 @@ export function App() {
                     const auth = res.status === 401 || res.status === 403;
                     push({
                         kind: 'error',
-                        text: auth ? `模型拒绝了这个 API key（${res.status}）：${detail}` : `请求失败：${detail}`,
-                        fix: auth ? '检查 API key' : undefined,
+                        text: auth ? t.keyRejected(res.status, detail) : t.requestFailed(detail),
+                        fix: auth ? t.checkKey : undefined,
                     });
                     return;
                 }
@@ -264,11 +270,11 @@ export function App() {
                         push({
                             kind: 'error',
                             text: said
-                                ? '模型的输出达到长度上限，回答被截断了。'
-                                : '模型把输出额度都用在了思考上，还没来得及画。可以把要求说得更具体一些，或者换一个思考更少的模型（比如 deepseek-flash）。',
+                                ? t.truncated
+                                : t.allThinking,
                         });
                     } else if (!said) {
-                        push({ kind: 'say', text: '模型这一轮没有回复，也没有修改白板。' });
+                        push({ kind: 'say', text: t.noReply });
                     }
                     break;
                 }
@@ -283,15 +289,15 @@ export function App() {
                 });
             }
         } catch (err) {
-            if (stop.signal.aborted) push({ kind: 'say', text: '已停止。这一轮还没写完的修改没有画到白板上。' });
+            if (stop.signal.aborted) push({ kind: 'say', text: t.stopped });
             else if (!import.meta.env.DEV && err instanceof TypeError && settings) {
                 // A fetch that fails outright from a page is a blocked cross-origin request or no network.
                 push({
                     kind: 'error',
-                    text: `浏览器连不上 ${modelInfo(settings).service}。这个服务可能不允许网页直接调用（跨域限制），可以在设置里填写一个代理的接口地址；也请检查网络连接。`,
-                    fix: '打开设置',
+                    text: t.unreachable(modelInfo(settings).service),
+                    fix: t.openSettings,
                 });
-            } else push({ kind: 'error', text: `出错了：${err instanceof Error ? err.message : String(err)}` });
+            } else push({ kind: 'error', text: t.failed(err instanceof Error ? err.message : String(err)) });
         } finally {
             cancelAnimationFrame(frame);
             setLive(null);
@@ -313,14 +319,14 @@ export function App() {
 
     return (
         <div className={`demo${panelOpen ? '' : ' is-folded'}`}>
-            <main className="demo-board" aria-label="白板">
-                <Whiteboard ref={board} storageKey="react-whiteboard-ai-demo" locale="zh" />
+            <main className="demo-board" aria-label={t.board}>
+                <Whiteboard ref={board} storageKey="react-whiteboard-ai-demo" locale={lang} />
                 {!panelOpen && (
                     <div className="board-corner">
-                        <a className="board-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label="在 GitHub 查看源码" title="GitHub">
+                        <a className="board-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label={t.viewSource} title="GitHub">
                             <GitHubIcon />
                         </a>
-                        <button ref={reopenButton} type="button" className="panel-reopen" onClick={() => togglePanel(true)} aria-label={`展开 AI 助手${busy ? '（正在回复）' : unseen ? '（有新消息）' : ''}`}>
+                        <button ref={reopenButton} type="button" className="panel-reopen" onClick={() => togglePanel(true)} aria-label={t.openAssistant(busy, unseen)}>
                             {busy ? (
                                 <span className="spinner" aria-hidden />
                             ) : (
@@ -328,17 +334,17 @@ export function App() {
                                     <path d="M8 1.5c.5 2.9 1.6 4 4.5 4.5-2.9.5-4 1.6-4.5 4.5-.5-2.9-1.6-4-4.5-4.5 2.9-.5 4-1.6 4.5-4.5ZM12.5 10.5c.2 1.2.7 1.7 2 2-1.3.3-1.8.8-2 2-.2-1.2-.7-1.7-2-2 1.3-.3 1.8-.8 2-2Z" />
                                 </svg>
                             )}
-                            AI 助手
+                            {t.assistant}
                             {unseen && !busy && <span className="panel-reopen-dot" aria-hidden />}
                         </button>
                     </div>
                 )}
             </main>
 
-            <aside className="panel" aria-label="AI 助手" inert={!panelOpen}>
+            <aside className="panel" aria-label={t.assistant} inert={!panelOpen}>
                 <header className="panel-head">
                     <h1>react-whiteboard-ai</h1>
-                    <a className="panel-icon panel-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label="在 GitHub 查看源码" title="GitHub">
+                    <a className="panel-icon panel-github" href={REPO_URL} target="_blank" rel="noreferrer" aria-label={t.viewSource} title="GitHub">
                         <GitHubIcon />
                     </a>
                     <button
@@ -359,11 +365,11 @@ export function App() {
                                 {import.meta.env.DEV && !settings && <span className="connection-model">（.env.local）</span>}
                             </>
                         ) : (
-                            <strong>连接模型</strong>
+                            <strong>{t.connectShort}</strong>
                         )}
                     </button>
                     {settingsOpen && (
-                        <div ref={popover} className="popover" role="dialog" aria-label="连接模型">
+                        <div ref={popover} className="popover" role="dialog" aria-label={t.connect}>
                             <SettingsPanel
                                 settings={settings}
                                 hasServerKey={Boolean(serverModel)}
@@ -382,7 +388,7 @@ export function App() {
                             />
                         </div>
                     )}
-                    <button ref={collapseButton} type="button" className="panel-icon panel-collapse" onClick={() => togglePanel(false)} aria-label="收起 AI 助手" title="收起">
+                    <button ref={collapseButton} type="button" className="panel-icon panel-collapse" onClick={() => togglePanel(false)} aria-label={t.closeAssistant} title={t.close}>
                         <svg viewBox="0 0 16 16" aria-hidden>
                             <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
                             <path d="M10.25 2.75v10.5M4.75 6.25 6.5 8l-1.75 1.75" />
@@ -394,7 +400,7 @@ export function App() {
                     ref={logRef}
                     className="log"
                     aria-live="polite"
-                    aria-label="操作记录"
+                    aria-label={t.log}
                     onScroll={(e) => {
                         const el = e.currentTarget;
                         followLog.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
@@ -402,10 +408,10 @@ export function App() {
                 >
                     {log.length === 0 && (
                         <div className="log-empty">
-                            <p className="log-empty-title">告诉我要在白板上画什么</p>
+                            <p className="log-empty-title">{t.emptyTitle}</p>
                             <p>
-                                比如“画一个三步的注册流程”“把所有框改成蓝色”。
-                                {canAsk ? '也可以直接点下面的示例。' : '先在右上角连接模型（任何 Anthropic 或 OpenAI 兼容的接口，包括公司网关），再输入指令或点下面的示例。'}
+                                {t.emptyExamples}
+                                {canAsk ? t.emptyCanAsk : t.emptyConnect}
                             </p>
                         </div>
                     )}
@@ -423,7 +429,7 @@ export function App() {
                     {busy && !live?.blocks.some((b) => b && b.type !== 'other') && (
                         <p className="working" role="status">
                             <span className="spinner" aria-hidden />
-                            <span className="trim">等待模型回复</span>
+                            <span className="trim">{t.waiting}</span>
                         </p>
                     )}
                 </section>
@@ -437,8 +443,8 @@ export function App() {
                 >
                     {!busy && (
                         <div className="examples">
-                            <div className="examples-tabs" role="tablist" aria-label="示例分类">
-                                {EXAMPLE_GROUPS.map((g) => (
+                            <div className="examples-tabs" role="tablist" aria-label={t.exampleGroups}>
+                                {groups.map((g) => (
                                     <button
                                         key={g.id}
                                         type="button"
@@ -481,9 +487,9 @@ export function App() {
                             rows={1}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={onComposerKey}
-                            placeholder={canAsk ? '要画什么？' : '先连接模型，才能用文字指挥'}
+                            placeholder={canAsk ? t.placeholder : t.placeholderOff}
                             disabled={!canAsk || busy}
-                            aria-label="给 AI 的指令"
+                            aria-label={t.composerLabel}
                         />
                         <div className="composer-tools">
                             <button
@@ -491,7 +497,7 @@ export function App() {
                                 role="switch"
                                 aria-checked={deepThinking}
                                 className="think-toggle"
-                                title="让模型先推理再动手。更适合复杂指令，但会慢很多。"
+                                title={t.thinkTitle}
                                 onClick={() => {
                                     saveThinking(!deepThinking);
                                     setDeepThinking(!deepThinking);
@@ -500,28 +506,38 @@ export function App() {
                                 <svg viewBox="0 0 16 16" aria-hidden>
                                     <path d="M8 1.75a4.25 4.25 0 0 0-2.4 7.76c.4.27.65.72.65 1.2v.54h3.5v-.54c0-.48.25-.93.65-1.2A4.25 4.25 0 0 0 8 1.75ZM6.25 13h3.5M6.75 14.75h2.5" />
                                 </svg>
-                                深度思考
+                                {t.think}
                             </button>
                             {busy ? (
-                                <button type="button" className="send is-stop" onClick={() => stopRef.current?.abort()} aria-label="停止" title="停止">
+                                <button type="button" className="send is-stop" onClick={() => stopRef.current?.abort()} aria-label={t.stop} title={t.stop}>
                                     <svg viewBox="0 0 16 16" aria-hidden>
                                         <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
                                     </svg>
                                 </button>
                             ) : canAsk ? (
-                                <button type="submit" className="send" disabled={!input.trim()} aria-label="发送" title="发送（回车）">
+                                <button type="submit" className="send" disabled={!input.trim()} aria-label={t.send} title={t.sendTitle}>
                                     <svg viewBox="0 0 16 16" aria-hidden>
                                         <path d="M8 13V3.5M3.75 7.5 8 3.25l4.25 4.25" />
                                     </svg>
                                 </button>
                             ) : (
                                 <button type="button" className="send-connect" onClick={() => setSettingsOpen(true)}>
-                                    连接模型
+                                    {t.connect}
                                 </button>
                             )}
                         </div>
                     </div>
-                    <p className="composer-hint">回车发送，Shift+回车换行 · AI 每轮修改算一步，{UNDO_KEYS} 整体撤回</p>
+                    <div className="composer-foot">
+                        <p className="composer-hint">{t.composerHint(UNDO_KEYS)}</p>
+                        {/* Named in the other language, so it reads as the way out to anyone who cannot read this one. */}
+                        <button type="button" className="lang-switch" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label={t.switchLabel} title={t.switchLabel} lang={lang === 'zh' ? 'en' : 'zh-CN'}>
+                            <svg viewBox="0 0 16 16" aria-hidden>
+                                <circle cx="8" cy="8" r="6.25" />
+                                <path d="M1.75 8h12.5M8 1.75c1.7 1.8 2.5 3.9 2.5 6.25S9.7 12.45 8 14.25C6.3 12.45 5.5 10.35 5.5 8S6.3 3.55 8 1.75Z" />
+                            </svg>
+                            {t.switchTo}
+                        </button>
+                    </div>
                 </form>
             </aside>
         </div>
@@ -529,12 +545,14 @@ export function App() {
 }
 
 function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: number; onOpenSettings: () => void }) {
+    const lang = useLang();
+    const t = STRINGS[lang];
     switch (entry.kind) {
         case 'prompt':
             return (
                 <div className={`note${index % 2 ? ' note-tilt' : ''}`}>
                     <p>{entry.text}</p>
-                    {entry.example && <span className="note-tag">示例</span>}
+                    {entry.example && <span className="note-tag">{t.exampleTag}</span>}
                 </div>
             );
         case 'say':
@@ -557,20 +575,20 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
                 <ul className="ops">
                     {entry.calls.map((call, i) => {
                         const result = entry.results[i];
-                        const { kind, title, detail } = describeCall(call, result);
+                        const { kind, title, detail } = describeCall(call, result, lang);
                         return (
                             <li key={i} className={`op op-${kind}`}>
                                 <p className="op-title">{title}</p>
                                 {detail && <p className="op-detail">{detail}</p>}
                                 {result.errors.length > 0 && (
-                                    <ul className="op-errors" aria-label="退回给模型的错误">
+                                    <ul className="op-errors" aria-label={t.returnedErrors}>
                                         {result.errors.map((err) => (
                                             <li key={err}>{err}</li>
                                         ))}
                                     </ul>
                                 )}
                                 <details>
-                                    <summary>查看参数</summary>
+                                    <summary>{t.showInput}</summary>
                                     <pre>
                                         <code>
                                             {call.name}
@@ -587,18 +605,11 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
     }
 }
 
-const PENDING: Record<string, [string, string]> = {
-    add_shapes: ['正在添加图形', '个'],
-    add_diagram: ['正在描述图的结构', '个节点'],
-    draw_sketch: ['正在构思线稿', '笔'],
-    update_shapes: ['正在修改图形', '处'],
-    delete_shapes: ['正在删除图形', '个'],
-};
-
 /** The reply as it streams in: text grows word by word, tool calls show how far along they are. */
 type LiveReplyProps = { message: LiveMessage; thinkingSeconds: number; thoughtOpen: boolean; onToggleThought: () => void };
 
 function LiveReply({ message, thinkingSeconds, thoughtOpen, onToggleThought }: LiveReplyProps) {
+    const t = useT();
     return (
         <>
             {message.blocks.map((b, i) => {
@@ -627,13 +638,13 @@ function LiveReply({ message, thinkingSeconds, thoughtOpen, onToggleThought }: L
                     );
                 }
                 if (b.type === 'tool_use') {
-                    const [label, unit] = PENDING[b.name] ?? [`正在调用 ${b.name}`, '项'];
+                    const [label, unit] = t.pending[b.name] ?? t.pendingOther(b.name);
                     const n = countSoFar(b.name, b.partialJson);
                     return (
                         <div key={i} className="op op-pending" role="status">
                             <span className="spinner" aria-hidden />
                             <p className="op-title">{label}</p>
-                            <p className="op-detail">{n ? `已写好 ${n} ${unit}，写完后一起画到白板上` : '正在写参数'}</p>
+                            <p className="op-detail">{n ? t.pendingCount(n, unit) : t.pendingStart}</p>
                         </div>
                     );
                 }
@@ -660,6 +671,7 @@ type ThoughtProps = {
  * which follows new words while it streams unless the reader has scrolled up.
  */
 function Thought({ text, seconds, live, open: controlled, onToggle, defaultOpen = false }: ThoughtProps) {
+    const t = useT();
     const id = useId();
     const [own, setOwn] = useState(defaultOpen);
     const open = controlled ?? own;
@@ -678,10 +690,10 @@ function Thought({ text, seconds, live, open: controlled, onToggle, defaultOpen 
             <button type="button" className="thought-toggle" aria-expanded={open} aria-controls={id} onClick={toggle}>
                 <span className="thought-status">
                     {live && <span className="spinner" aria-hidden />}
-                    <span className="trim">{live ? `正在思考，已 ${seconds} 秒` : seconds ? `思考了 ${seconds} 秒` : '思考过程'}</span>
+                    <span className="trim">{live ? t.thinking(seconds) : seconds ? t.thought(seconds) : t.thoughtUntimed}</span>
                 </span>
                 <span className="thought-action">
-                    <span className="trim">{open ? '收起' : '展开'}</span>
+                    <span className="trim">{open ? t.collapse : t.expand}</span>
                     <span className="thought-chevron" aria-hidden />
                 </span>
             </button>

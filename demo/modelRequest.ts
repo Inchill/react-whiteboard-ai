@@ -26,13 +26,13 @@ export type Target = {
 /** A guess from the address alone: a Chat Completions URL is OpenAI format. */
 export const formatFromUrl = (url: string): ApiFormat | null => (/\/chat\/completions\/?$/i.test(url.trim()) ? 'openai' : null);
 
-/** Known Anthropic-compatible endpoints, offered as suggestions and used to name the service. */
+/** Known Anthropic-compatible endpoints, offered as suggestions and used to name the service (`name` in Chinese, `en` in English). */
 export const KNOWN_ENDPOINTS = [
-    { name: 'DeepSeek', url: 'https://api.deepseek.com/anthropic' },
-    { name: '千问', url: 'https://dashscope.aliyuncs.com/apps/anthropic' },
-    { name: '智谱', url: 'https://open.bigmodel.cn/api/anthropic' },
-    { name: '豆包', url: 'https://ark.cn-beijing.volces.com/api/compatible' },
-    { name: 'Claude', url: 'https://api.anthropic.com' },
+    { name: 'DeepSeek', en: 'DeepSeek', url: 'https://api.deepseek.com/anthropic' },
+    { name: '千问', en: 'Qwen', url: 'https://dashscope.aliyuncs.com/apps/anthropic' },
+    { name: '智谱', en: 'GLM', url: 'https://open.bigmodel.cn/api/anthropic' },
+    { name: '豆包', en: 'Doubao', url: 'https://ark.cn-beijing.volces.com/api/compatible' },
+    { name: 'Claude', en: 'Claude', url: 'https://api.anthropic.com' },
 ] as const;
 
 /** Reasoning models spend part of this on thinking, so leave plenty of room for the answer. */
@@ -63,13 +63,13 @@ const sameEndpoint = (a: string, b: string) => messagesUrl(a) === messagesUrl(b)
  * A short name for the service behind an endpoint: one the user named, a known one, otherwise its
  * host. User-named endpoints match by full address, since a proxy may share a host with others.
  */
-export function serviceName(baseUrl: string, named: readonly { name: string; url: string }[] = []): string {
+export function serviceName(baseUrl: string, named: readonly { name: string; url: string }[] = [], lang: 'zh' | 'en' = 'zh'): string {
     const host = hostOf(baseUrl);
-    if (!host) return '接口地址';
+    if (!host) return lang === 'en' ? 'endpoint' : '接口地址';
     const own = named.find((e) => sameEndpoint(e.url, baseUrl));
     if (own) return own.name;
-    if (host.endsWith('.maas.aliyuncs.com')) return '千问';
-    return KNOWN_ENDPOINTS.find((e) => hostOf(e.url) === host)?.name ?? host;
+    const known = host.endsWith('.maas.aliyuncs.com') ? KNOWN_ENDPOINTS[1] : KNOWN_ENDPOINTS.find((e) => hostOf(e.url) === host);
+    return known ? known[lang === 'en' ? 'en' : 'name'] : host;
 }
 
 const isAnthropic = (baseUrl: string) => hostOf(baseUrl) === 'api.anthropic.com';

@@ -1,5 +1,9 @@
 # react-whiteboard-ai
 
+English | [简体中文](./README.zh-CN.md)
+
+**[Live demo](https://inchill.github.io/react-whiteboard-ai/)**: bring your own API key (Claude, DeepSeek, an OpenAI-compatible gateway and more); the page has English and Chinese.
+
 Let an LLM read and draw on an [`@inchill/react-whiteboard`](https://github.com/Inchill/react-whiteboard) board: flowcharts and architecture diagrams with automatic layout, hand-drawn line sketches, and plain shape edits.
 
 The package gives you the pieces between the board and the model, and nothing else:
@@ -23,7 +27,7 @@ It never calls a model and never sees an API key. You send the request from your
 | `update_shapes` | Move (`dx`/`dy`, any shape), resize, restyle, reroute lines (`via`, `curved`) or edit text by id |
 | `delete_shapes` | Delete by id |
 
-Anything the model draws without coordinates is placed to the right of what is already on the board.
+Anything the model draws without coordinates is placed to the right of what is already on the board. New content that would overlap existing shapes is moved clear as a group; annotations (a label inside a box, a highlight around a group, an arrow that ends at a shape) stay where the model put them.
 
 ### `add_diagram`
 
@@ -31,12 +35,12 @@ Anything the model draws without coordinates is placed to the right of what is a
 {
     "direction": "down",
     "nodes": [
-        { "id": "web", "label": "Web", "layer": "客户端" },
-        { "id": "app", "label": "App", "layer": "客户端" },
-        { "id": "gw", "label": "API 网关", "layer": "接入层" },
-        { "id": "order", "label": "订单服务", "layer": "服务层" },
-        { "id": "user", "label": "用户服务", "layer": "服务层" },
-        { "id": "db", "label": "MySQL", "layer": "数据层" }
+        { "id": "web", "label": "Web", "layer": "Clients" },
+        { "id": "app", "label": "App", "layer": "Clients" },
+        { "id": "gw", "label": "API gateway", "layer": "Edge" },
+        { "id": "order", "label": "Order service", "layer": "Services" },
+        { "id": "user", "label": "User service", "layer": "Services" },
+        { "id": "db", "label": "MySQL", "layer": "Data" }
     ],
     "edges": [
         { "from": "web", "to": "gw" },
@@ -51,7 +55,7 @@ Anything the model draws without coordinates is placed to the right of what is a
 
 - **Rows**: with `layer` names, each layer is a row with a labeled band, in order of first use. Without them, rows follow the arrows. `direction: "right"` lays it out left to right, for pipelines and timelines.
 - **Arrows**: each link is a single arrow that turns at right angles through `via` points, so it selects, moves and deletes as one shape. Arrows that skip rows are routed around boxes. Many-to-many links between two rows share a bus. Links within a row and links pointing back up (loops, retries) get their own routes.
-- **Shapes**: `shape: "ellipse"` is for the start and end of a flow. Edge labels such as "是" / "否" sit on the arrow.
+- **Shapes**: `shape: "ellipse"` is for the start and end of a flow. Edge labels such as "yes" / "no" sit on the arrow.
 
 The tool result maps each node id to the box drawn for it (`nodes: { gw: "s12", … }`), so the model can edit the diagram in a later turn. Limits: 60 nodes, 120 edges.
 
@@ -205,16 +209,16 @@ pnpm install
 pnpm dev
 ```
 
-The demo is a whiteboard with a chat panel. It shows:
+The demo is a whiteboard with a chat panel, in English or Chinese (it follows the browser's language; the switch under the input box changes it). It shows:
 
-- **Example prompts**, grouped by what the tools do well: 手绘 (sketches), 结构图 (diagrams), 布局 (layouts) and 编辑 (edits on what is already there). Clicking one sends it to the model.
+- **Example prompts**, grouped by what the tools do well: sketches, diagrams, layouts and edits on what is already there. Clicking one sends it to the model, which answers and labels the drawing in the language of the prompt.
 - **Streaming replies**: you see the model's text as it writes it, its thinking (collapsible), and how many shapes it has written so far. When a round is complete, its shapes land on the board as one undo step. Each tool call is listed with a short summary, along with any validation errors sent back to the model.
 - **Deep thinking**: a switch that turns the model's reasoning on or off. Off is faster. On draws better sketches and more complex diagrams.
 - **Stop**: cancels the current request.
 
 ### Connect a model
 
-Click **连接模型** in the panel header and fill in the endpoint, the API format, an API key and the model. Two formats work:
+Click **Connect** in the panel header and fill in the endpoint, the API format, an API key and the model. Two formats work:
 
 - **Anthropic Messages** (`…/v1/messages`): Claude and the Anthropic-compatible endpoints of DeepSeek, Qwen, GLM, Doubao and others.
 - **OpenAI-compatible Chat Completions** (`…/chat/completions`): what most company gateways and self-hosted model gateways offer. The conversation and tools are sent in that format, and the streamed reply (text, tool calls, and `reasoning_content` as thinking) is translated back, so everything else works the same. There is no common switch for reasoning in this format, so the deep-thinking switch has no effect there.
@@ -229,7 +233,7 @@ The endpoint field suggests some:
 | Doubao (Volcengine Ark) | `https://ark.cn-beijing.volces.com/api/compatible` |
 | Claude | `https://api.anthropic.com` |
 
-The endpoint can also be any other compatible service, a company gateway or your own proxy: type its address, pick its format, and choose *添加到常用接口* to keep it in the list under a name of your own. It is stored in this browser (the address, name and format, never the key) and can be removed from the list again. An address ending in `/chat/completions` selects the OpenAI format by itself. Model names change often, so check each service's documentation for current ones. In the Anthropic format the key is sent with both `x-api-key` and, except to Anthropic, `Authorization: Bearer`, since compatible services differ in which they read; in the OpenAI format it is sent as `Authorization: Bearer`. The deep-thinking switch sends `thinking` enabled or disabled explicitly, because services differ in whether a model thinks by default; if a service rejects the request, it is retried once without it. Settings are kept in this tab only, or in the browser if you tick *在这个浏览器里记住*.
+The endpoint can also be any other compatible service, a company gateway or your own proxy: type its address, pick its format, and choose *Save this endpoint* to keep it in the list under a name of your own. It is stored in this browser (the address, name and format, never the key) and can be removed from the list again. An address ending in `/chat/completions` selects the OpenAI format by itself. Model names change often, so check each service's documentation for current ones. In the Anthropic format the key is sent with both `x-api-key` and, except to Anthropic, `Authorization: Bearer`, since compatible services differ in which they read; in the OpenAI format it is sent as `Authorization: Bearer`. The deep-thinking switch sends `thinking` enabled or disabled explicitly, because services differ in whether a model thinks by default; if a service rejects the request, it is retried once without it. Settings are kept in this tab only, or in the browser if you tick *Remember in this browser*.
 
 In `pnpm dev`, requests go through a small proxy in the Vite dev server, which forwards them and streams the reply back. The proxy never logs or stores keys. It prints one line per request with timing and event counts, never content.
 

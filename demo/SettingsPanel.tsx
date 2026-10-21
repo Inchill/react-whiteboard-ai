@@ -3,6 +3,7 @@ import { EndpointField } from './EndpointField';
 import { allEndpoints, loadCustomEndpoints, saveCustomEndpoints, type Endpoint } from './endpoints';
 import { formatFromUrl, serviceName, type ApiFormat } from './modelRequest';
 import type { AISettings } from './settings';
+import { useLang, STRINGS } from './i18n';
 
 type Props = {
     settings: AISettings | null;
@@ -15,6 +16,8 @@ type Props = {
 
 export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose }: Props) {
     const id = useId();
+    const lang = useLang();
+    const t = STRINGS[lang];
     const [baseUrl, setBaseUrl] = useState(settings?.baseUrl ?? '');
     const [key, setKey] = useState('');
     const [model, setModel] = useState(settings?.model ?? '');
@@ -39,10 +42,8 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
 
     return (
         <form className="settings" onSubmit={submit} aria-labelledby={`${id}-title`}>
-            <h2 id={`${id}-title`}>连接模型</h2>
-            <p className="settings-intro">
-                Anthropic 消息格式或 OpenAI 兼容格式的接口都能用：Claude、DeepSeek、千问、智谱、豆包，也可以是公司内部网关。
-            </p>
+            <h2 id={`${id}-title`}>{t.connect}</h2>
+            <p className="settings-intro">{t.settingsIntro}</p>
 
             <EndpointField
                 value={baseUrl}
@@ -52,19 +53,19 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
                     if (guessed) setFormat(guessed);
                 }}
                 format={format}
-                endpoints={allEndpoints(custom)}
+                endpoints={allEndpoints(custom, lang)}
                 onAdd={(e) => updateCustom([...custom, e])}
                 onRemove={(url) => updateCustom(custom.filter((e) => e.url !== url))}
                 autoFocus
             />
 
             <div className="settings-field">
-                <span id={`${id}-format`}>接口格式</span>
+                <span id={`${id}-format`}>{t.format}</span>
                 <div className="segmented" role="radiogroup" aria-labelledby={`${id}-format`}>
                     {(
                         [
-                            ['anthropic', 'Anthropic 消息'],
-                            ['openai', 'OpenAI 兼容'],
+                            ['anthropic', t.formatAnthropic],
+                            ['openai', t.formatOpenAI],
                         ] as const
                     ).map(([value, label]) => (
                         <button key={value} type="button" role="radio" aria-checked={format === value} onClick={() => setFormat(value)}>
@@ -74,8 +75,8 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
                 </div>
                 <small className="settings-hint">
                     {format === 'openai'
-                        ? '请求发到 …/chat/completions。这种格式没有统一的推理开关，「深度思考」不起作用，模型自己推理时仍会显示思考过程。'
-                        : '请求发到 …/v1/messages。不确定的话看网关文档：路径里有 chat/completions 的选 OpenAI 兼容。'}
+                        ? t.formatHintOpenAI
+                        : t.formatHintAnthropic}
                 </small>
             </div>
 
@@ -85,38 +86,39 @@ export function SettingsPanel({ settings, hasServerKey, onSave, onClear, onClose
                     type="password"
                     value={key}
                     onChange={(e) => setKey(e.target.value)}
-                    placeholder={keepsOldKey ? '已保存，留空则继续使用' : '这个接口的 key'}
+                    placeholder={keepsOldKey ? t.keyKept : t.keyPlaceholder}
                     autoComplete="off"
                     spellCheck={false}
                 />
             </label>
 
             <label className="settings-field">
-                <span>模型</span>
-                <input value={model} onChange={(e) => setModel(e.target.value)} placeholder={format === 'openai' ? '以网关里的模型名为准，如 gpt-5、qwen-max' : '如 deepseek-v4-pro、glm-5.2'} spellCheck={false} />
+                <span>{t.model}</span>
+                <input value={model} onChange={(e) => setModel(e.target.value)} placeholder={format === 'openai' ? t.modelPlaceholderOpenAI : t.modelPlaceholder} spellCheck={false} />
             </label>
 
             <label className="settings-check">
                 <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-                在这个浏览器里记住
+                {t.remember}
             </label>
             <p className="settings-note">
-                {remember ? 'key 会留在这个浏览器里，下次打开还能用。' : 'key 只留在这个标签页，关掉就清除。'}
+                {remember ? t.remembered : t.tabOnly}
                 {import.meta.env.DEV
-                    ? '请求由本地开发服务器转发，它不保存也不打印 key。'
-                    : `请求从你的浏览器直接发到 ${baseUrl.trim() ? serviceName(baseUrl, custom) : '这个接口'}，不经过其他服务器。`}
+                    ? // Dev-only text stays inline behind the DEV check, so the build drops it (see the deploy workflow).
+                    lang === 'zh' ? '请求由本地开发服务器转发，它不保存也不打印 key。' : 'Requests go through the local dev server, which neither stores nor logs the key.'
+                    : t.direct(baseUrl.trim() ? serviceName(baseUrl, custom, lang) : null)}
             </p>
 
             <div className="settings-actions">
                 <button type="submit" className="button-primary" disabled={!complete}>
-                    保存
+                    {t.save}
                 </button>
                 <button type="button" onClick={onClose}>
-                    取消
+                    {t.cancel}
                 </button>
                 {settings && (
                     <button type="button" className="button-quiet" onClick={onClear}>
-                        {import.meta.env.DEV && hasServerKey ? '清除，改用 .env.local' : '清除'}
+                        {import.meta.env.DEV && hasServerKey ? (lang === 'zh' ? '清除，改用 .env.local' : 'Clear and use .env.local') : t.clear}
                     </button>
                 )}
             </div>
