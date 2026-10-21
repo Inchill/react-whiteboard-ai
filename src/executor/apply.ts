@@ -1,4 +1,4 @@
-import { createId as defaultCreateId, measureText, shapeBox, translateShape, unionBox } from '../geometry';
+import { boxContains, boxesOverlap, clearOffset, createId as defaultCreateId, measureText, round, shapeBox, translateShape, unionBox } from '../geometry';
 import { layoutDiagram } from '../layout/diagram';
 import { joinParts } from '../sketch/join';
 import { sketchToShapes } from '../sketch/sketch';
@@ -123,11 +123,48 @@ function besideContent(shapes: Shape[]) {
     return bounds ? { x: bounds.x + bounds.w + 80, y: bounds.y } : { x: 0, y: 0 };
 }
 
+/** Space kept between new content and what is already on the board (the prompt asks the model for the same). */
+const CLEARANCE = 40;
+
+/**
+ * Whether new shapes are meant to sit on existing ones: a label inside a box, a highlight around
+ * a group, an arrow that starts or ends at an existing shape. Such shapes are left where they are.
+ */
+function attachesTo(added: Shape[], existing: Shape[]): boolean {
+    const boxes = existing.map(shapeBox);
+    return added.some((s) => {
+        if (s.type === 'line' || s.type === 'arrow') {
+            const ends = [{ x: s.x1, y: s.y1, w: 0, h: 0 }, { x: s.x2, y: s.y2, w: 0, h: 0 }];
+            return ends.some((e) => boxes.some((b) => boxesOverlap(e, b, 24)));
+        }
+        const b = shapeBox(s);
+        return boxes.some((o) => boxContains(o, b) || boxContains(b, o));
+    });
+}
+
+/** Move a group of new shapes as one piece so it clears existing content; reports the move when there was one. */
+function placeClear(added: Shape[], existing: Shape[]): { shapes: Shape[]; note?: string } {
+    const box = unionBox(added.map(shapeBox));
+    if (!box || !existing.length) return { shapes: added };
+    const { dx, dy } = clearOffset(box, existing.map(shapeBox), CLEARANCE);
+    if (!dx && !dy) return { shapes: added };
+    return {
+        shapes: added.map((s) => translateShape(s, dx, dy)),
+        note: `moved the new shapes by (${round(dx)}, ${round(dy)}) so they do not overlap existing content`,
+    };
+}
+
 function applyOne(shapes: Shape[], op: Operation, createId: () => string): { shapes: Shape[]; result: OperationResult } {
     const result: OperationResult = { op: op.op, created: [], updated: [], deleted: [], errors: [] };
     switch (op.op) {
         case 'add_shapes': {
-            const added = op.shapes.map((input) => inputToShape(input, createId()));
+            let added = op.shapes.map((input) => inputToShape(input, createId()));
+            // Standalone content that lands on existing shapes is moved aside as a group; annotations stay put.
+            if (!attachesTo(added, shapes)) {
+                const placed = placeClear(added, shapes);
+                added = placed.shapes;
+                if (placed.note) result.notes = [placed.note];
+            }
             result.created = added.map((s) => s.id);
             return { shapes: [...shapes, ...added], result };
         }
@@ -151,19 +188,23 @@ function applyOne(shapes: Shape[], op: Operation, createId: () => string): { sha
             return { shapes: result.updated.length ? next : shapes, result };
         }
         case 'draw_sketch': {
-            const drawn = sketchToShapes(op.sketch, { createId, origin: besideContent(shapes) });
-            result.created = drawn.map((s) => s.id);
-            const moves = joinParts(op.sketch);
-            if (moves.length) result.notes = moves.map((m) => `moved "${m.part}" by (${m.dx}, ${m.dy}) to join "${m.on}"`);
-            return { shapes: [...shapes, ...drawn], result };
+            const placed = placeClear(sketchToShapes(op.sketch, { createId, origin: besideContent(shapes) }), shapes);
+            result.created = placed.shapes.map((s) => s.id);
+            const notes = joinParts(op.sketch).map((m) => `moved "${m.part}" by (${m.dx}, ${m.dy}) to join "${m.on}"`);
+            if (placed.note) notes.push(placed.note);
+            if (notes.length) result.notes = notes;
+            return { shapes: [...shapes, ...placed.shapes], result };
         }
         case 'add_diagram': {
             // Unless told where, put the diagram to the right of what is already on the board.
             const origin = besideContent(shapes);
             const drawn = layoutDiagram(op.diagram, { createId, origin });
-            result.created = drawn.shapes.map((s) => s.id);
+            // A position the model chose can still land on existing content.
+            const placed = placeClear(drawn.shapes, shapes);
+            result.created = placed.shapes.map((s) => s.id);
             result.nodes = drawn.nodes;
-            return { shapes: [...shapes, ...drawn.shapes], result };
+            if (placed.note) result.notes = [placed.note];
+            return { shapes: [...shapes, ...placed.shapes], result };
         }
         case 'delete_shapes': {
             const existing = new Set(shapes.map((s) => s.id));
