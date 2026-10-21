@@ -23,4 +23,10 @@ describe('serviceName', () => {
         expect(serviceName('https://gw.example.com/anthropic')).toBe('gw.example.com');
         expect(serviceName('not a url')).toBe('接口地址');
     });
+
+    it('names known services in English when asked', () => {
+        expect(serviceName('https://open.bigmodel.cn/api/anthropic', [], 'en')).toBe('GLM');
+        expect(serviceName('https://ws-1.cn-beijing.maas.aliyuncs.com/apps/anthropic', [], 'en')).toBe('Qwen');
+        expect(serviceName('not a url', [], 'en')).toBe('endpoint');
+    });
 });

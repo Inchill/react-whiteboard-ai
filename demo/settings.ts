@@ -1,5 +1,6 @@
 import { loadCustomEndpoints } from './endpoints';
 import { serviceName, type ApiFormat } from './modelRequest';
+import { getLang } from './i18n';
 
 /** Any Anthropic-compatible endpoint: the user fills in all three. */
 export type AISettings = {
@@ -74,7 +75,7 @@ export function clearSettings() {
 }
 
 /** What the header shows: the service (by the user's own name for it, if any) and the model. */
-export const modelInfo = (s: Pick<AISettings, 'baseUrl' | 'model'>) => ({ service: serviceName(s.baseUrl, loadCustomEndpoints()), model: s.model });
+export const modelInfo = (s: Pick<AISettings, 'baseUrl' | 'model'>) => ({ service: serviceName(s.baseUrl, loadCustomEndpoints(), getLang()), model: s.model });
 
 /** Headers the local dev proxy reads to use this endpoint and key for one request. */
 export const settingsHeaders = (s: AISettings): Record<string, string> => ({

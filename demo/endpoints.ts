@@ -38,8 +38,8 @@ export function saveCustomEndpoints(list: Endpoint[]) {
 }
 
 /** Built-in endpoints first, then the user's, without duplicates. */
-export function allEndpoints(custom: Endpoint[]): Endpoint[] {
-    const known = KNOWN_ENDPOINTS.map((e): Endpoint => ({ name: e.name, url: e.url, format: 'anthropic' }));
+export function allEndpoints(custom: Endpoint[], lang: 'zh' | 'en' = 'zh'): Endpoint[] {
+    const known = KNOWN_ENDPOINTS.map((e): Endpoint => ({ name: lang === 'en' ? e.en : e.name, url: e.url, format: 'anthropic' }));
     const seen = new Set(known.map((e) => messagesUrl(e.url)));
     return [...known, ...custom.filter((e) => !seen.has(messagesUrl(e.url)))];
 }

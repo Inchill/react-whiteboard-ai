@@ -1,6 +1,7 @@
 import { useId, useState, type KeyboardEvent } from 'react';
 import { isListed, normalizeEndpoint, type Endpoint } from './endpoints';
 import type { ApiFormat } from './modelRequest';
+import { useT } from './i18n';
 
 type Props = {
     value: string;
@@ -29,6 +30,7 @@ const hostOf = (url: string) => {
  * typed in, and an address that is not in the list can be added to it under a name.
  */
 export function EndpointField({ value, onChange, format, endpoints, onAdd, onRemove, autoFocus }: Props) {
+    const t = useT();
     const id = useId();
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(-1);
@@ -91,7 +93,7 @@ export function EndpointField({ value, onChange, format, endpoints, onAdd, onRem
 
     return (
         <div className="settings-field">
-            <label htmlFor={`${id}-input`}>接口地址</label>
+            <label htmlFor={`${id}-input`}>{t.endpoint}</label>
             <div className="combo">
                 <input
                     id={`${id}-input`}
@@ -110,7 +112,7 @@ export function EndpointField({ value, onChange, format, endpoints, onAdd, onRem
                     onKeyDown={onKeyDown}
                     onClick={() => setOpen(true)}
                     onBlur={() => setOpen(false)}
-                    placeholder="选一个，或输入任意地址（如公司网关）"
+                    placeholder={t.endpointPlaceholder}
                     spellCheck={false}
                     autoComplete="off"
                     inputMode="url"
@@ -120,7 +122,7 @@ export function EndpointField({ value, onChange, format, endpoints, onAdd, onRem
                     type="button"
                     className={`combo-toggle${shown ? ' is-open' : ''}`}
                     tabIndex={-1}
-                    aria-label="常用接口"
+                    aria-label={t.commonEndpoints}
                     // Keep focus in the input, so the list does not close on blur first.
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setOpen(!shown)}
@@ -130,7 +132,7 @@ export function EndpointField({ value, onChange, format, endpoints, onAdd, onRem
                     </svg>
                 </button>
                 {shown && (
-                    <ul className="combo-list" role="listbox" id={`${id}-list`} aria-label="常用接口">
+                    <ul className="combo-list" role="listbox" id={`${id}-list`} aria-label={t.commonEndpoints}>
                         {items.map((e, i) => (
                             <li
                                 key={e.url}
@@ -152,8 +154,8 @@ export function EndpointField({ value, onChange, format, endpoints, onAdd, onRem
                                         type="button"
                                         className="combo-remove"
                                         tabIndex={-1}
-                                        aria-label={`删除 ${e.name}`}
-                                        title="从列表删除"
+                                        aria-label={t.removeEndpoint(e.name)}
+                                        title={t.removeFromList}
                                         onClick={(ev) => {
                                             ev.stopPropagation();
                                             onRemove(e.url);
@@ -167,7 +169,7 @@ export function EndpointField({ value, onChange, format, endpoints, onAdd, onRem
                             </li>
                         ))}
                         <li className="combo-hint" role="presentation" onMouseDown={(ev) => ev.preventDefault()}>
-                            列表里没有？直接在上面输入地址，比如公司网关，再「添加到常用接口」。
+                            {t.endpointHint}
                         </li>
                     </ul>
                 )}
@@ -175,7 +177,7 @@ export function EndpointField({ value, onChange, format, endpoints, onAdd, onRem
 
             {addable && naming === null && (
                 <button type="button" className="combo-add" onClick={() => setNaming(hostOf(normalizeEndpoint(typed) ?? ''))}>
-                    ＋ 添加到常用接口
+                    {t.addEndpoint}
                 </button>
             )}
             {addable && naming !== null && (
@@ -184,16 +186,16 @@ export function EndpointField({ value, onChange, format, endpoints, onAdd, onRem
                         value={naming}
                         onChange={(e) => setNaming(e.target.value)}
                         onKeyDown={onNameKey}
-                        placeholder="名称，如 Kimi"
-                        aria-label="新接口的名称"
+                        placeholder={t.endpointName}
+                        aria-label={t.endpointNameLabel}
                         maxLength={24}
                         autoFocus
                     />
                     <button type="button" className="button-primary" onClick={add} disabled={!naming.trim()}>
-                        添加
+                        {t.add}
                     </button>
                     <button type="button" onClick={() => setNaming(null)}>
-                        取消
+                        {t.cancel}
                     </button>
                 </div>
             )}
