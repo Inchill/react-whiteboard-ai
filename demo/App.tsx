@@ -417,7 +417,7 @@ export function App() {
 
             {/* Phones: while the sheet is up, a tap on the board behind it puts the sheet away without drawing. */}
             {narrow && sheetUp && <div className="sheet-scrim" aria-hidden onPointerDown={() => moveSheet(false)} />}
-            <aside className="panel" aria-label={t.assistant} inert={!chatShown && !narrow} style={sheetStyle}>
+            <aside className={`panel${settingsOpen ? ' is-settings' : ''}`} aria-label={t.assistant} inert={!chatShown && !narrow} style={sheetStyle}>
                 {/* Phones only: the grabber at the top of the sheet, and the slim bar it leaves when down. */}
                 {/* The grabber is the sheet's close control on phones: drag it down or tap it. */}
                 <button type="button" className="sheet-grabber" aria-label={t.sheetDown} tabIndex={narrow && sheetUp ? 0 : -1} {...handleProps}>

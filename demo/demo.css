@@ -1312,6 +1312,24 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
+    /* iOS Safari zooms the page in when a field under 16px gets focus, and stays zoomed after,
+       which lets the whole page, board toolbar included, be dragged around. 16px fields avoid
+       that; the page itself is pinned so nothing can scroll it either. */
+    html,
+    body {
+        overflow: hidden;
+        overscroll-behavior: none;
+    }
+    body {
+        touch-action: manipulation;
+    }
+    .composer textarea,
+    .settings-field input,
+    .settings-field .combo input,
+    .settings-field .combo-naming input {
+        font-size: 16px;
+    }
+
     /* Phones: the board fills the screen and the chat is a sheet over it. Up, it holds the
        conversation; down, it leaves a slim bar with the latest step, which a tap or an upward
        swipe brings back. The board stops above that bar, so its toolbar stays in reach. */
@@ -1319,8 +1337,9 @@ button:disabled {
         --peek: 56px;
         --peek-full: calc(var(--peek) + env(safe-area-inset-bottom));
         display: block;
-        position: relative;
-        height: 100dvh;
+        position: fixed;
+        inset: 0;
+        height: auto;
         overflow: hidden;
     }
 
@@ -1455,7 +1474,29 @@ button:disabled {
     }
 
     .panel-head {
+        flex-wrap: wrap;
         padding: 2px 12px 10px 16px;
+    }
+
+    /* Settings take the sheet's place of the conversation instead of hanging below it, where a
+       short sheet would push them off the screen. */
+    .panel-head .popover {
+        position: static;
+        order: 10;
+        flex-basis: 100%;
+        width: auto;
+        max-height: calc(80dvh - 80px);
+        margin-top: 8px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        animation: none;
+    }
+    .panel-head .popover::before {
+        display: none;
+    }
+    .panel.is-settings .log,
+    .panel.is-settings .composer {
+        display: none;
     }
 
     /* The model name would push the header over; the service name says enough here, and it is
