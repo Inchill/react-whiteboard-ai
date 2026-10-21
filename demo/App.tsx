@@ -418,9 +418,10 @@ export function App() {
             {narrow && sheetUp && <div className="sheet-scrim" aria-hidden onPointerDown={() => moveSheet(false)} />}
             <aside className="panel" aria-label={t.assistant} inert={!chatShown && !narrow} style={sheetStyle}>
                 {/* Phones only: the grabber at the top of the sheet, and the slim bar it leaves when down. */}
-                <div className="sheet-grabber" aria-hidden {...handleProps}>
-                    <span />
-                </div>
+                {/* The grabber is the sheet's close control on phones: drag it down or tap it. */}
+                <button type="button" className="sheet-grabber" aria-label={t.sheetDown} tabIndex={narrow && sheetUp ? 0 : -1} {...handleProps}>
+                    <span aria-hidden />
+                </button>
                 <button
                     type="button"
                     className="sheet-peek"

@@ -1370,9 +1370,17 @@ button:disabled {
     .sheet-grabber {
         display: flex;
         justify-content: center;
-        padding: 8px 0 0;
+        width: 100%;
+        padding: 8px 0 4px;
+        border: 0;
+        background: none;
         touch-action: none;
         cursor: grab;
+    }
+
+    /* The grabber, a swipe and a tap on the board already put the sheet away. */
+    .panel-collapse {
+        display: none;
     }
     .sheet-grabber span,
     .sheet-peek-grabber {
@@ -1450,7 +1458,7 @@ button:disabled {
     }
 
     .panel-head {
-        padding: 6px 12px 10px 16px;
+        padding: 2px 12px 10px 16px;
     }
 
     /* The model name would push the header over; the service name says enough here, and it is
