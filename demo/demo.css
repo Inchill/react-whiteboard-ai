@@ -1276,43 +1276,129 @@ button:disabled {
 
 /* ---- narrow screens: board on top, panel below ---- */
 
+.lang-switch-head {
+    display: none;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+/* The board's menu opens downward from its top-left corner; on a short board it would run under
+   the bottom toolbar and out of view, so it scrolls within the board and sits above the toolbar. */
+.demo-board {
+    container-type: size;
+}
+.demo-board .rwb-top-left {
+    z-index: 4;
+}
+.demo-board .rwb-menu {
+    max-height: calc(100cqh - 72px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
 @media (max-width: 760px) {
+    /* Phones: the page never scrolls. The board takes what the panel leaves, and the panel is
+       capped so the board keeps most of the screen; the log scrolls inside the panel. */
     .demo {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: 58vh auto;
-        height: auto;
-    }
-
-    .demo-board {
-        height: 58vh;
+        grid-template-rows: minmax(0, 1fr) auto;
+        height: 100dvh;
     }
 
     .panel {
+        max-height: 40dvh;
         border-left: 0;
         border-top: 1px solid var(--line);
     }
 
-    .panel-head,
+    .panel-head {
+        padding: 8px 12px 8px 16px;
+    }
+
     .settings,
     .log {
         padding-left: 16px;
         padding-right: 16px;
     }
 
-    .composer {
-        padding: 12px 16px 16px;
+    .log {
+        padding-top: 12px;
+        padding-bottom: 12px;
+        gap: 10px;
     }
 
-    .log {
-        max-height: 60vh;
+    /* Before the first prompt the examples say what to do; the empty log would only take room. */
+    .log.is-empty {
+        display: none;
+    }
+
+    .composer {
+        gap: 8px;
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    }
+
+    /* Examples in one row that scrolls sideways. Once the conversation has started, only the chips
+       of the chosen group stay. */
+    .composer-examples {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        margin: 0 -16px;
+        padding: 0 16px 2px;
+        scrollbar-width: none;
+    }
+    .composer-examples::-webkit-scrollbar {
+        display: none;
+    }
+    .composer-examples > button {
+        flex: none;
+    }
+    .examples-hint,
+    .composer.has-log .examples-tabs {
+        display: none;
+    }
+
+    /* The input and its buttons share one line; deep thinking shows as its icon only. */
+    .composer-box {
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 6px;
+        padding: 6px 6px 6px 12px;
+    }
+    .composer textarea {
+        flex: 1;
+        min-width: 0;
+        min-height: 32px;
+        padding-top: 4px;
+    }
+    .composer-tools {
+        flex: none;
+        gap: 6px;
+    }
+    .think-toggle {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        justify-content: center;
+    }
+    .think-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    /* Keyboard hints mean nothing on a phone, and the language switch moves to the header. */
+    .composer .composer-foot {
+        display: none;
+    }
+    .lang-switch-head {
+        display: grid;
     }
 
     .demo.is-folded {
-        grid-template-rows: 100dvh;
-    }
-
-    .demo.is-folded .demo-board {
-        height: 100dvh;
+        grid-template-rows: minmax(0, 1fr);
     }
 }
 

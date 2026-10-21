@@ -388,6 +388,10 @@ export function App() {
                             />
                         </div>
                     )}
+                    {/* On phones the switch moves up here, where the composer's footer line is dropped. */}
+                    <button type="button" className="panel-icon lang-switch-head" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} aria-label={t.switchLabel} title={t.switchLabel} lang={lang === 'zh' ? 'en' : 'zh-CN'}>
+                        {lang === 'zh' ? 'EN' : '中'}
+                    </button>
                     <button ref={collapseButton} type="button" className="panel-icon panel-collapse" onClick={() => togglePanel(false)} aria-label={t.closeAssistant} title={t.close}>
                         <svg viewBox="0 0 16 16" aria-hidden>
                             <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
@@ -398,7 +402,7 @@ export function App() {
 
                 <section
                     ref={logRef}
-                    className="log"
+                    className={`log${log.length || busy ? '' : ' is-empty'}`}
                     aria-live="polite"
                     aria-label={t.log}
                     onScroll={(e) => {
@@ -435,7 +439,7 @@ export function App() {
                 </section>
 
                 <form
-                    className="composer"
+                    className={`composer${log.length ? ' has-log' : ''}`}
                     onSubmit={(e) => {
                         e.preventDefault();
                         void ask(input);
@@ -506,7 +510,7 @@ export function App() {
                                 <svg viewBox="0 0 16 16" aria-hidden>
                                     <path d="M8 1.75a4.25 4.25 0 0 0-2.4 7.76c.4.27.65.72.65 1.2v.54h3.5v-.54c0-.48.25-.93.65-1.2A4.25 4.25 0 0 0 8 1.75ZM6.25 13h3.5M6.75 14.75h2.5" />
                                 </svg>
-                                {t.think}
+                                <span className="think-label">{t.think}</span>
                             </button>
                             {busy ? (
                                 <button type="button" className="send is-stop" onClick={() => stopRef.current?.abort()} aria-label={t.stop} title={t.stop}>
