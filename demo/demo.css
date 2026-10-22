@@ -1645,3 +1645,17 @@ button:disabled {
     stroke: currentColor;
     stroke-width: 1.4;
 }
+
+/* On a narrow board the toolbar scrolls sideways. Its hidden tooltips hang below the buttons, which
+   also made it scrollable up and down: a vertical swipe on it slid the buttons out of view. The
+   tooltips are clipped there anyway, so they go, and the toolbar only scrolls sideways. */
+@container rwb (max-width: 720px) {
+    .rwb-toolbar .rwb-tip {
+        display: none;
+    }
+    .rwb-toolbar {
+        overflow-y: hidden;
+        overscroll-behavior: contain;
+        touch-action: pan-x;
+    }
+}
