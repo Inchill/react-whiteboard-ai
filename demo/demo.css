@@ -1279,20 +1279,6 @@ button:disabled {
     font-weight: 600;
 }
 
-/* The board's menu opens downward from its top-left corner; on a short board it would run under
-   the bottom toolbar and out of view, so it scrolls within the board and sits above the toolbar. */
-.demo-board {
-    container-type: size;
-}
-.demo-board .rwb-top-left {
-    z-index: 4;
-}
-.demo-board .rwb-menu {
-    max-height: calc(100cqh - 72px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-}
-
 /* Phone-only parts of the chat sheet. */
 .sheet-grabber,
 .sheet-peek,

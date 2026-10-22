@@ -18,8 +18,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@inchill/react-whiteboard':
-        specifier: ^1.1.0
-        version: 1.1.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: ^1.1.1
+        version: 1.1.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -409,8 +409,8 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
-  '@inchill/react-whiteboard@1.1.0':
-    resolution: {integrity: sha512-wKg9g+gBw7qBzyCPEEXy5DeKqKN1ILn7r51ZGl9EHIRggaF3Mt+TSs4ZLhBuEa+l+KElIa1E1KMJPZfwAFBXew==}
+  '@inchill/react-whiteboard@1.1.1':
+    resolution: {integrity: sha512-fmueMG875r7UTrS32dp0/UrKaaWoV19O28vuZtUP68oDPA0ryIYMBQOfWuD2oBygj83AiXHZJlahr41GsY4Ijg==}
     engines: {node: '>=24', pnpm: '>=10'}
     peerDependencies:
       react: '>=18'
@@ -1788,7 +1788,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@inchill/react-whiteboard@1.1.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@inchill/react-whiteboard@1.1.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
