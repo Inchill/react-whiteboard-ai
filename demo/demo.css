@@ -657,7 +657,138 @@ button:disabled {
 .say {
     margin: 0;
     max-width: 92%;
-    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* A table needs every column it can get in the narrow panel. */
+.say:has(.md-table) {
+    max-width: none;
+}
+
+/* The model's reply, rendered from Markdown. Kept compact: it sits in a narrow side panel. */
+.md > :first-child {
+    margin-top: 0;
+}
+
+.md > :last-child {
+    margin-bottom: 0;
+}
+
+.md :is(p, ul, ol, blockquote, pre, .md-table, hr) {
+    margin: 0 0 0.7em;
+}
+
+.md :is(h1, h2, h3, h4, h5, h6) {
+    margin: 1em 0 0.4em;
+    font-size: 1em;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.md :is(h1, h2) {
+    font-size: 1.08em;
+}
+
+.md strong {
+    font-weight: 650;
+}
+
+.md :is(ul, ol) {
+    padding-left: 1.4em;
+}
+
+.md li + li,
+.md li > :is(ul, ol) {
+    margin-top: 0.25em;
+}
+
+.md li > p {
+    margin: 0;
+}
+
+.md :is(blockquote, li) > :last-child {
+    margin-bottom: 0;
+}
+
+.md li:has(> input[type='checkbox']) {
+    list-style: none;
+    margin-left: -1.3em;
+}
+
+.md input[type='checkbox'] {
+    margin: 0 0.4em 0 0;
+    vertical-align: -0.1em;
+}
+
+.md a {
+    color: var(--blue);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.md blockquote {
+    padding: 2px 0 2px 12px;
+    border-left: 2px solid var(--line-strong);
+    color: var(--muted);
+}
+
+.md hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+}
+
+.md code {
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: var(--surface-sunk);
+    font-family: var(--mono);
+    font-size: 0.86em;
+}
+
+.md pre {
+    padding: 10px 12px;
+    overflow-x: auto;
+    border-radius: 8px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+
+.md pre code {
+    padding: 0;
+    background: none;
+    font-size: inherit;
+}
+
+.md-table {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}
+
+.md table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.md :is(th, td) {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+    min-width: 3em;
+}
+
+.md th {
+    background: var(--surface-sunk);
+    font-weight: 600;
+}
+
+.md tr:last-child td {
+    border-bottom: 0;
 }
 
 /* The model's changes: one entry per tool call, coded with the board's marker colors. */
@@ -816,11 +947,13 @@ button:disabled {
     grid-column: 2;
 }
 
-.say-live::after {
+.say-live > :is(p, h1, h2, h3, h4, h5, h6, blockquote):last-child::after,
+.say-live > :is(ul, ol):last-child > li:last-child::after {
     animation: blink 1s steps(2, start) infinite;
 }
 
-.say-live::after {
+.say-live > :is(p, h1, h2, h3, h4, h5, h6, blockquote):last-child::after,
+.say-live > :is(ul, ol):last-child > li:last-child::after {
     content: '▍';
     margin-left: 1px;
     color: var(--blue);
@@ -900,7 +1033,8 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
     .spinner,
-    .say-live::after {
+    .say-live > :is(p, h1, h2, h3, h4, h5, h6, blockquote):last-child::after,
+    .say-live > :is(ul, ol):last-child > li:last-child::after {
         animation: none;
     }
 
