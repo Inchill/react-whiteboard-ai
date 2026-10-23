@@ -6,6 +6,7 @@ import { EXAMPLE_GROUPS, loadExampleGroup, saveExampleGroup } from './examples';
 import { applyTheme, BOARD_KEY } from './theme';
 import { getLang, setLang, STRINGS, useLang, useT, type Lang } from './i18n';
 import { SettingsPanel } from './SettingsPanel';
+import { Markdown, plainText } from './Markdown';
 import { callModel } from './modelRequest';
 import { countSoFar, fromCompleteMessage, readMessageStream, toAssistantContent, type LiveMessage } from './stream';
 import {
@@ -663,6 +664,8 @@ function summarize(entry: LogEntry, lang: Lang): string {
         }
         case 'thought':
             return STRINGS[lang].thought(entry.seconds);
+        case 'say':
+            return plainText(entry.text);
         default:
             return entry.text;
     }
@@ -680,7 +683,7 @@ function LogItem({ entry, index, onOpenSettings }: { entry: LogEntry; index: num
                 </div>
             );
         case 'say':
-            return <p className="say">{entry.text}</p>;
+            return <Markdown className="say" text={entry.text} />;
         case 'thought':
             return <Thought text={entry.text} seconds={entry.seconds} live={false} defaultOpen={entry.open} />;
         case 'error':
@@ -741,11 +744,7 @@ function LiveReply({ message, thinkingSeconds, thoughtOpen, onToggleThought }: L
                 if (b.type === 'text') {
                     // The caret only follows the text that is still being written.
                     const writing = i === message.blocks.length - 1;
-                    return b.text ? (
-                        <p key={i} className={writing ? 'say say-live' : 'say'}>
-                            {b.text}
-                        </p>
-                    ) : null;
+                    return b.text ? <Markdown key={i} className={writing ? 'say say-live' : 'say'} text={b.text} /> : null;
                 }
                 if (b.type === 'thinking') {
                     // Reasoning models (DeepSeek V4 among them) think before answering; keep it to one quiet line.
