@@ -660,6 +660,11 @@ button:disabled {
     overflow-wrap: anywhere;
 }
 
+/* A table needs every column it can get in the narrow panel. */
+.say:has(.md-table) {
+    max-width: none;
+}
+
 /* The model's reply, rendered from Markdown. Kept compact: it sits in a narrow side panel. */
 .md > :first-child {
     margin-top: 0;
@@ -770,19 +775,16 @@ button:disabled {
 }
 
 .md :is(th, td) {
-    padding: 6px 10px;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--line);
     text-align: left;
     vertical-align: top;
-    overflow-wrap: normal;
-    word-break: normal;
-    min-width: 4em;
+    min-width: 3em;
 }
 
 .md th {
     background: var(--surface-sunk);
     font-weight: 600;
-    white-space: nowrap;
 }
 
 .md tr:last-child td {
